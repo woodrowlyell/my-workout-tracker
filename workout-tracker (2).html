@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f4f3ef;
+    color: #1c1c1a;
+    padding-bottom: 80px;
+  }
+  .header {
+    background: #1c1c1a;
+    color: #fff;
+    padding: 20px 16px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .header h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+  .header .sub { font-size: 12px; color: #b8b7b0; }
+  .week-picker {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .week-btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid #444;
+    background: #2a2a27;
+    color: #d5d4cd;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .week-btn.active {
+    background: #e8722c;
+    border-color: #e8722c;
+    color: #fff;
+    font-weight: 600;
+  }
+  .day-tabs {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 10px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e2e0d8;
+    position: sticky;
+    top: 96px;
+    z-index: 9;
+  }
+  .day-tab {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    background: #f7f6f2;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+  }
+  .day-tab.active {
+    background: #1c1c1a;
+    color: #fff;
+    border-color: #1c1c1a;
+  }
+  .content { padding: 14px; }
+  .banner {
+    background: #fdf0e6;
+    border: 1px solid #f0cba4;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #7a4a1c;
+    margin-bottom: 14px;
+    line-height: 1.4;
+  }
+  .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #999;
+    font-weight: 700;
+    margin: 18px 0 8px;
+  }
+  .section-label:first-child { margin-top: 0; }
+  .card {
+    background: #fff;
+    border: 1px solid #e6e4dc;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .ex-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .ex-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+  .ex-scheme {
+    font-size: 13px;
+    color: #777;
+    margin: 0;
+  }
+  .ex-link {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #e8722c;
+    text-decoration: none;
+    border: 1px solid #f0cba4;
+    background: #fdf0e6;
+    padding: 6px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .ex-note {
+    font-size: 12px;
+    color: #a15a1c;
+    background: #fdf0e6;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-top: 6px;
+    display: inline-block;
+  }
+  .weight-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0efe9;
+  }
+  .weight-row label {
+    font-size: 12px;
+    color: #888;
+    flex-shrink: 0;
+  }
+  .weight-row input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    background: #fafaf8;
+  }
+  .weight-row .unit { font-size: 12px; color: #999; flex-shrink: 0; }
+  .prev-weight {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
+  }
+  .simple-item {
+    background: #fff;
+    border: 1px solid #e6e4dc;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .goal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .goal-card {
+    background: #fff;
+    border: 1px solid #e6e4dc;
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .goal-card .g-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.03em; }
+  .goal-card .g-val { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .prog-box {
+    background: #fff;
+    border: 1px solid #e6e4dc;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .prog-box .p-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .checkpoint-card {
+    background: #fff;
+    border: 1px solid #e6e4dc;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .checkpoint-card h3 { margin: 0 0 10px; font-size: 15px; }
+  .cp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .cp-row label { font-size: 13px; color: #666; width: 60px; flex-shrink: 0; }
+  .cp-row input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .save-toast {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1c1c1a;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: transform 0.25s ease;
+    z-index: 20;
+  }
+  .save-toast.show { transform: translateX(-50%) translateY(0); }
+  .icon {
+    width: 14px;
+    height: 14px;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .rest-note {
+    font-size: 13px;
+    color: #666;
+    background: #fff;
+    border: 1px solid #e6e4dc;
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>8-week strength program</h1>
+  <div class="sub" id="week-sub">Week 1 · Weeks 1-2: leave 2-3 reps in reserve</div>
+  <div class="week-picker" id="week-picker"></div>
+</div>
+
+<div class="day-tabs" id="day-tabs"></div>
+
+<div class="content" id="content"></div>
+
+<div class="content" id="checkpoint-content" style="display:none"></div>
+
+<div class="save-toast" id="toast">Saved</div>
+
+<script>
+const YT = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+const PF = (slug) => `https://www.planetfitness.com/exercises/${slug}`;
+
+const mobility = {
+  type: 'mobility',
+  title: 'Mobility warm-up (5 min)',
+  items: [
+    '10 bodyweight squats',
+    '10 arm circles forward/backward',
+    '10 band pull-aparts (or light cable rear delt pulls)',
+    '10 cat-cow stretches',
+    '30-second hamstring stretch'
+  ]
+};
+
+const days = {
+  mon: {
+    label: 'Mon · Push',
+    warmup: { name: 'Treadmill', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Machine chest press', scheme: '3 x 10', link: PF('chest-press') },
+      { name: 'Incline dumbbell press', scheme: '3 x 10', link: YT('incline dumbbell press proper form'), note: 'Swapped from incline chest press machine' },
+      { name: 'Seated shoulder press', scheme: '3 x 10', link: PF('shoulder-press') },
+      { name: 'Cable lateral raise', scheme: '3 x 12', link: YT('cable lateral raise form') },
+      { name: 'Triceps rope pushdown', scheme: '3 x 12', link: PF('triceps-pushdown') }
+    ],
+    finisher: { name: 'Incline treadmill', scheme: '10 min · 10% incline · 3.2-3.5 mph', link: null }
+  },
+  tue: {
+    label: 'Tue · Legs',
+    warmup: { name: 'Bike', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Smith machine Romanian deadlift', scheme: '4 x 10 · 3-sec lowering', link: YT('smith machine romanian deadlift tutorial') },
+      { name: 'Leg press', scheme: '3 x 12', link: PF('leg-press') },
+      { name: 'Walking lunges', scheme: '2 x 12 each leg', link: YT('walking lunges proper form') },
+      { name: 'Seated leg curl', scheme: '3 x 12', link: PF('leg-curl') },
+      { name: 'Calf raise machine', scheme: '3 x 15', link: PF('calf-raise') },
+      { name: 'Plank', scheme: '3 x 45 sec', link: YT('plank proper form'), noWeight: true }
+    ],
+    finisher: null
+  },
+  wed: {
+    label: 'Wed · Recovery',
+    rest: true,
+    items: [
+      '10,000+ steps today',
+      'Stretch: hamstrings',
+      'Stretch: hip flexors',
+      'Stretch: chest',
+      'Stretch: upper back',
+      'Optional: 20-30 min easy walk'
+    ]
+  },
+  thu: {
+    label: 'Thu · Pull',
+    warmup: { name: 'Row machine', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Lat pulldown', scheme: '3 x 10', link: PF('lat-pulldown') },
+      { name: 'Chest supported row', scheme: '3 x 10', link: YT('chest supported row machine form') },
+      { name: 'Seated cable row', scheme: '3 x 10', link: PF('seated-row') },
+      { name: 'Face pulls', scheme: '3 x 15', link: YT('cable face pull proper form') },
+      { name: 'Hammer curl', scheme: '3 x 12', link: YT('dumbbell hammer curl form') },
+      { name: 'Cable curl', scheme: '2 x 12', link: YT('cable curl proper form') }
+    ],
+    finisher: { name: 'Incline walk', scheme: '10 min', link: null }
+  },
+  fri: {
+    label: 'Fri · Full body',
+    warmup: { name: 'Treadmill', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Goblet squat', scheme: '3 x 10', link: YT('goblet squat proper form') },
+      { name: 'Smith machine incline press', scheme: '3 x 10', link: YT('smith machine incline press form') },
+      { name: 'Lat pulldown', scheme: '3 x 10', link: PF('lat-pulldown') },
+      { name: 'Smith machine Romanian deadlift', scheme: '3 x 10', link: YT('smith machine romanian deadlift tutorial') },
+      { name: 'Cable wood chop', scheme: '3 x 12 each side', link: YT('cable wood chop proper form') },
+      { name: 'Farmer carry', scheme: '3 x 45 sec', link: YT('farmer carry proper form') }
+    ],
+    finisher: { name: 'Incline walk', scheme: '10 min', link: null }
+  },
+  sat: {
+    label: 'Sat · Cardio',
+    rest: true,
+    items: [
+      '45-60 min walk, OR bike for 30 min',
+      'Goal: 10,000-12,000 steps'
+    ]
+  },
+  sun: {
+    label: 'Sun · Rest',
+    rest: true,
+    items: [
+      'Rest',
+      'Stretch',
+      'Foam roll',
+      'Walk if desired'
+    ]
+  }
+};
+
+const progressionText = {
+  early: { title: 'Weeks 1-2', body: 'Choose a weight that is challenging but leaves 2-3 reps in reserve.' },
+  mid: { title: 'Weeks 3-4', body: 'If you complete all sets and reps with good form, increase the weight by the smallest increment available next workout.' },
+  late: { title: 'Weeks 5-6', body: 'Continue adding weight when possible. Aim to leave 1-2 reps in reserve on your final set.' },
+  push: { title: 'Weeks 7-8 (optional)', body: 'Last set of each exercise only: do the prescribed reps, then if you can safely do more with good form, go to about one rep shy of failure. Skip this on Smith machine RDLs or if it aggravates your neck or shoulder.' }
+};
+
+function getPhase(week) {
+  if (week <= 2) return 'early';
+  if (week <= 4) return 'mid';
+  if (week <= 6) return 'late';
+  return 'push';
+}
+
+let state = {
+  week: 1,
+  day: 'mon',
+  view: 'day',
+  weights: {},
+  checkpoints: { start: {}, week4: {}, week8: {} }
+};
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1400);
+}
+
+async function loadState() {
+  try {
+    const raw = localStorage.getItem('workout-state');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state = { ...state, ...parsed };
+    }
+  } catch (e) {}
+  render();
+}
+
+async function saveState() {
+  try {
+    localStorage.setItem('workout-state', JSON.stringify(state));
+    toast('Saved');
+  } catch (e) {
+    toast('Save failed, try again');
+  }
+}
+
+function weightKey(day, exName) {
+  return `${day}::${exName}`;
+}
+
+function getPrevWeight(day, exName, week) {
+  for (let w = week - 1; w >= 1; w--) {
+    const k = weightKey(day, exName) + `::w${w}`;
+    if (state.weights[k]) return { week: w, val: state.weights[k] };
+  }
+  return null;
+}
+
+function renderWeekPicker() {
+  const wp = document.getElementById('week-picker');
+  wp.innerHTML = '';
+  for (let i = 1; i <= 8; i++) {
+    const b = document.createElement('button');
+    b.className = 'week-btn' + (state.week === i ? ' active' : '');
+    b.textContent = 'Wk ' + i;
+    b.onclick = () => { state.week = i; saveState(); render(); };
+    wp.appendChild(b);
+  }
+  const phase = progressionText[getPhase(state.week)];
+  document.getElementById('week-sub').textContent = `Week ${state.week} · ${phase.title}: ${phase.body.split('.')[0]}.`;
+}
+
+function renderDayTabs() {
+  const dt = document.getElementById('day-tabs');
+  dt.innerHTML = '';
+  Object.keys(days).forEach(key => {
+    const b = document.createElement('button');
+    b.className = 'day-tab' + (state.day === key && state.view !== 'checkpoints' ? ' active' : '');
+    b.textContent = days[key].label;
+    b.onclick = () => { state.day = key; state.view = 'day'; saveState(); render(); };
+    dt.appendChild(b);
+  });
+  const cb = document.createElement('button');
+  cb.className = 'day-tab' + (state.view === 'checkpoints' ? ' active' : '');
+  cb.textContent = 'Checkpoints';
+  cb.onclick = () => { state.view = 'checkpoints'; saveState(); render(); };
+  dt.appendChild(cb);
+}
+
+function linkIcon() {
+  return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>`;
+}
+
+function renderExerciseCard(day, ex, isWarmup, isFinisher) {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const top = document.createElement('div');
+  top.className = 'ex-top';
+
+  const left = document.createElement('div');
+  left.innerHTML = `<p class="ex-name">${ex.name}</p><p class="ex-scheme">${ex.scheme}</p>`;
+  top.appendChild(left);
+
+  if (ex.link) {
+    const a = document.createElement('a');
+    a.className = 'ex-link';
+    a.href = ex.link;
+    a.target = '_blank';
+    a.innerHTML = linkIcon() + ' How-to';
+    top.appendChild(a);
+  }
+  card.appendChild(top);
+
+  if (ex.note) {
+    const note = document.createElement('div');
+    note.className = 'ex-note';
+    note.textContent = ex.note;
+    card.appendChild(note);
+  }
+
+  if (!isWarmup && !isFinisher && !ex.noWeight) {
+    const key = weightKey(day, ex.name);
+    const wkKey = key + `::w${state.week}`;
+    const row = document.createElement('div');
+    row.className = 'weight-row';
+    row.innerHTML = `
+      <label>This week</label>
+      <input type="number" inputmode="decimal" placeholder="0" value="${state.weights[wkKey] || ''}" />
+      <span class="unit">lbs</span>
+    `;
+    const input = row.querySelector('input');
+    input.addEventListener('change', () => {
+      state.weights[wkKey] = input.value;
+      saveState();
+    });
+    card.appendChild(row);
+
+    const prev = getPrevWeight(day, ex.name, state.week);
+    if (prev) {
+      const p = document.createElement('div');
+      p.className = 'prev-weight';
+      p.textContent = `Week ${prev.week}: ${prev.val} lbs`;
+      card.appendChild(p);
+    }
+  }
+
+  return card;
+}
+
+function renderContent() {
+  const content = document.getElementById('content');
+  content.innerHTML = '';
+  const day = days[state.day];
+
+  if (day.rest) {
+    const banner = document.createElement('div');
+    banner.className = 'rest-note';
+    banner.innerHTML = day.items.map(i => `<div style="padding:4px 0">${i}</div>`).join('');
+    content.appendChild(banner);
+    return;
+  }
+
+  const banner = document.createElement('div');
+  banner.className = 'banner';
+  const phase = progressionText[getPhase(state.week)];
+  banner.innerHTML = `<strong>${phase.title}:</strong> ${phase.body}`;
+  content.appendChild(banner);
+
+  const mobLabel = document.createElement('div');
+  mobLabel.className = 'section-label';
+  mobLabel.textContent = 'Mobility warm-up';
+  content.appendChild(mobLabel);
+  const mobCard = document.createElement('div');
+  mobCard.className = 'simple-item';
+  mobCard.innerHTML = mobility.items.map(i => `<div style="padding:2px 0">${i}</div>`).join('');
+  content.appendChild(mobCard);
+
+  const cardioLabel = document.createElement('div');
+  cardioLabel.className = 'section-label';
+  cardioLabel.textContent = 'Cardio warm-up';
+  content.appendChild(cardioLabel);
+  content.appendChild(renderExerciseCard(state.day, day.warmup, true, false));
+
+  const exLabel = document.createElement('div');
+  exLabel.className = 'section-label';
+  exLabel.textContent = 'Exercises';
+  content.appendChild(exLabel);
+  day.exercises.forEach(ex => {
+    content.appendChild(renderExerciseCard(state.day, ex, false, false));
+  });
+
+  if (day.finisher) {
+    const finLabel = document.createElement('div');
+    finLabel.className = 'section-label';
+    finLabel.textContent = 'Cooldown cardio';
+    content.appendChild(finLabel);
+    content.appendChild(renderExerciseCard(state.day, day.finisher, false, true));
+  }
+}
+
+function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
+  const row = document.createElement('div');
+  row.className = 'cp-row';
+  const val = (state.checkpoints[cpKey] && state.checkpoints[cpKey][fieldKey]) || '';
+  row.innerHTML = `<label>${label}</label><input type="text" inputmode="decimal" placeholder="${placeholder}" value="${val}" />`;
+  const input = row.querySelector('input');
+  input.addEventListener('change', () => {
+    if (!state.checkpoints[cpKey]) state.checkpoints[cpKey] = {};
+    state.checkpoints[cpKey][fieldKey] = input.value;
+    saveState();
+  });
+  return row;
+}
+
+function renderCheckpoints() {
+  const cc = document.getElementById('checkpoint-content');
+  cc.innerHTML = '';
+
+  const intro = document.createElement('div');
+  intro.className = 'banner';
+  intro.innerHTML = '<strong>Monthly checkpoints:</strong> log your numbers at the start, week 4, and week 8 to see real progress. Take front, side, and back photos on your phone at each checkpoint and keep them in an album named for the date.';
+  cc.appendChild(intro);
+
+  const checkpointDefs = [
+    { key: 'start', title: 'Start' },
+    { key: 'week4', title: 'Week 4' },
+    { key: 'week8', title: 'Week 8' }
+  ];
+
+  checkpointDefs.forEach(def => {
+    const card = document.createElement('div');
+    card.className = 'checkpoint-card';
+    const h = document.createElement('h3');
+    h.textContent = def.title;
+    card.appendChild(h);
+    card.appendChild(renderCheckpointField(def.key, 'weight', 'Weight', 'lbs'));
+    card.appendChild(renderCheckpointField(def.key, 'waist', 'Waist', 'inches'));
+
+    const photoRow = document.createElement('div');
+    photoRow.style.cssText = 'font-size:12px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #f0efe9;';
+    photoRow.textContent = 'Photos: front, side, back (store in your phone\'s photo album)';
+    card.appendChild(photoRow);
+
+    cc.appendChild(card);
+  });
+}
+
+function render() {
+  renderWeekPicker();
+  renderDayTabs();
+  const dayContent = document.getElementById('content');
+  const cpContent = document.getElementById('checkpoint-content');
+  if (state.view === 'checkpoints') {
+    dayContent.style.display = 'none';
+    cpContent.style.display = 'block';
+    renderCheckpoints();
+  } else {
+    dayContent.style.display = 'block';
+    cpContent.style.display = 'none';
+    renderContent();
+  }
+}
+
+loadState();
+</script>
+
+</body>
+</html>
