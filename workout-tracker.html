@@ -343,6 +343,7 @@
 <div class="content" id="content"></div>
 <div class="content" id="checkpoint-content" style="display:none"></div>
 <div class="content" id="progress-content" style="display:none"></div>
+<div class="content" id="debug-content" style="display:none"></div>
 
 <div class="save-toast" id="toast">Saved</div>
 
@@ -361,7 +362,7 @@ const mobility = {
 
 const days = {
   mon: {
-    label: 'Mon · Push',
+    label: 'Mon Push',
     warmup: { name: 'Treadmill', scheme: '5 min', link: null },
     exercises: [
       { name: 'Machine chest press', scheme: '3 x 10', link: YT('machine chest press proper form') },
@@ -370,13 +371,13 @@ const days = {
       { name: 'Cable lateral raise', scheme: '3 x 12', link: YT('cable lateral raise form') },
       { name: 'Triceps rope pushdown', scheme: '3 x 12', link: YT('triceps rope pushdown proper form') }
     ],
-    finisher: { name: 'Incline treadmill', scheme: '10 min · 10% incline · 3.2-3.5 mph', link: null }
+    finisher: { name: 'Incline treadmill', scheme: '10 min - 10% incline - 3.2-3.5 mph', link: null }
   },
   tue: {
-    label: 'Tue · Legs',
+    label: 'Tue Legs',
     warmup: { name: 'Bike', scheme: '5 min', link: null },
     exercises: [
-      { name: 'Smith machine Romanian deadlift', scheme: '4 x 10 · 3-sec lowering', link: YT('smith machine romanian deadlift tutorial') },
+      { name: 'Smith machine Romanian deadlift', scheme: '4 x 10 - 3-sec lowering', link: YT('smith machine romanian deadlift tutorial') },
       { name: 'Leg press', scheme: '3 x 12', link: YT('leg press machine proper form') },
       { name: 'Walking lunges', scheme: '2 x 12 each leg', link: YT('walking lunges proper form') },
       { name: 'Seated leg curl', scheme: '3 x 12', link: YT('seated leg curl machine form') },
@@ -386,7 +387,7 @@ const days = {
     finisher: null
   },
   wed: {
-    label: 'Wed · Recovery',
+    label: 'Wed Recovery',
     rest: true,
     items: [
       '10,000+ steps today',
@@ -398,7 +399,7 @@ const days = {
     ]
   },
   thu: {
-    label: 'Thu · Pull',
+    label: 'Thu Pull',
     warmup: { name: 'Row machine', scheme: '5 min', link: null },
     exercises: [
       { name: 'Lat pulldown', scheme: '3 x 10', link: YT('lat pulldown proper form') },
@@ -411,7 +412,7 @@ const days = {
     finisher: { name: 'Incline walk', scheme: '10 min', link: null }
   },
   fri: {
-    label: 'Fri · Full body',
+    label: 'Fri Full body',
     warmup: { name: 'Treadmill', scheme: '5 min', link: null },
     exercises: [
       { name: 'Goblet squat', scheme: '3 x 10', link: YT('goblet squat proper form') },
@@ -424,7 +425,7 @@ const days = {
     finisher: { name: 'Incline walk', scheme: '10 min', link: null }
   },
   sat: {
-    label: 'Sat · Cardio',
+    label: 'Sat Cardio',
     rest: true,
     items: [
       '45-60 min walk, OR bike for 30 min',
@@ -432,7 +433,7 @@ const days = {
     ]
   },
   sun: {
-    label: 'Sun · Rest',
+    label: 'Sun Rest',
     rest: true,
     items: [
       'Rest',
@@ -445,7 +446,7 @@ const days = {
 
 const restrictedDays = {
   mon: {
-    label: 'Mon · Push',
+    label: 'Mon Push',
     warmup: { name: 'Treadmill', scheme: '5 min', link: null },
     exercises: [
       { name: 'Machine chest press (light)', scheme: '3 x 12', link: YT('machine chest press proper form'), note: '10 lb restriction: light resistance, focus on form' },
@@ -453,10 +454,10 @@ const restrictedDays = {
       { name: 'Triceps rope pushdown', scheme: '3 x 12', link: YT('triceps rope pushdown proper form'), note: 'Below shoulder height, safe under restriction' },
       { name: 'Seated triceps kickback (light)', scheme: '3 x 12', link: YT('triceps kickback proper form') }
     ],
-    finisher: { name: 'Incline treadmill', scheme: '10 min · lower incline as needed', link: null }
+    finisher: { name: 'Incline treadmill', scheme: '10 min - lower incline as needed', link: null }
   },
   tue: {
-    label: 'Tue · Legs',
+    label: 'Tue Legs',
     warmup: { name: 'Bike', scheme: '5 min', link: null },
     exercises: [
       { name: 'Bodyweight squat', scheme: '3 x 12', link: YT('bodyweight squat proper form') },
@@ -469,7 +470,7 @@ const restrictedDays = {
     finisher: null
   },
   wed: {
-    label: 'Wed · Recovery',
+    label: 'Wed Recovery',
     rest: true,
     items: [
       '10,000+ steps today',
@@ -481,18 +482,18 @@ const restrictedDays = {
     ]
   },
   thu: {
-    label: 'Thu · Pull',
+    label: 'Thu Pull',
     warmup: { name: 'Row machine (light)', scheme: '5 min', link: null },
     exercises: [
       { name: 'Seated cable row (light)', scheme: '3 x 12', link: YT('seated cable row proper form'), note: 'Below shoulder height' },
       { name: 'Chest supported row (light)', scheme: '3 x 12', link: YT('chest supported row machine form') },
-      { name: 'Straight-arm cable pulldown', scheme: '3 x 12', link: YT('straight arm pulldown proper form'), note: 'Not overhead — pulls down from a high position' },
+      { name: 'Straight-arm cable pulldown', scheme: '3 x 12', link: YT('straight arm pulldown proper form'), note: 'Not overhead, pulls down from a high position' },
       { name: 'Seated hammer curl (light)', scheme: '3 x 12', link: YT('dumbbell hammer curl form') }
     ],
     finisher: { name: 'Flat walk', scheme: '10 min', link: null }
   },
   fri: {
-    label: 'Fri · Full body',
+    label: 'Fri Full body',
     warmup: { name: 'Treadmill', scheme: '5 min', link: null },
     exercises: [
       { name: 'Bodyweight squat', scheme: '3 x 12', link: YT('bodyweight squat proper form') },
@@ -504,7 +505,7 @@ const restrictedDays = {
     finisher: { name: 'Flat walk', scheme: '10 min', link: null }
   },
   sat: {
-    label: 'Sat · Cardio',
+    label: 'Sat Cardio',
     rest: true,
     items: [
       '45-60 min walk, OR bike for 30 min',
@@ -512,7 +513,7 @@ const restrictedDays = {
     ]
   },
   sun: {
-    label: 'Sun · Rest',
+    label: 'Sun Rest',
     rest: true,
     items: [
       'Rest',
@@ -557,7 +558,31 @@ function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1400);
+  setTimeout(function() { t.classList.remove('show'); }, 1400);
+}
+
+function migrateOldData(oldRawStr) {
+  const parsedOld = JSON.parse(oldRawStr);
+  const migratedWeights = {};
+  if (parsedOld.weights) {
+    Object.keys(parsedOld.weights).forEach(function(oldKey) {
+      const match = oldKey.match(/^(.+)::w(\d+)$/);
+      if (match) {
+        const base = match[1];
+        const week = match[2];
+        const oldVal = parsedOld.weights[oldKey];
+        const weightVal = (typeof oldVal === 'object' && oldVal !== null) ? oldVal.weight : oldVal;
+        if (weightVal) {
+          const newKey = base + '::c1::w' + week;
+          migratedWeights[newKey] = {
+            weight: weightVal,
+            date: (typeof oldVal === 'object' && oldVal.date) ? oldVal.date : todayStr()
+          };
+        }
+      }
+    });
+  }
+  return migratedWeights;
 }
 
 async function loadState() {
@@ -569,26 +594,8 @@ async function loadState() {
     } else {
       const old = localStorage.getItem('workout-state');
       if (old) {
+        const migratedWeights = migrateOldData(old);
         const parsedOld = JSON.parse(old);
-        const migratedWeights = {};
-        if (parsedOld.weights) {
-          Object.keys(parsedOld.weights).forEach(function(oldKey) {
-            const match = oldKey.match(/^(.+)::w(\d+)$/);
-            if (match) {
-              const base = match[1];
-              const week = match[2];
-              const oldVal = parsedOld.weights[oldKey];
-              const weightVal = (typeof oldVal === 'object' && oldVal !== null) ? oldVal.weight : oldVal;
-              if (weightVal) {
-                const newKey = base + '::c1::w' + week;
-                migratedWeights[newKey] = {
-                  weight: weightVal,
-                  date: (typeof oldVal === 'object' && oldVal.date) ? oldVal.date : todayStr()
-                };
-              }
-            }
-          });
-        }
         state = Object.assign({}, state, parsedOld, { weights: migratedWeights, cycle: 1 });
         saveState();
         toast('Old data imported');
@@ -748,6 +755,12 @@ function renderDayTabs() {
   pb.textContent = 'Progress';
   pb.onclick = function() { state.view = 'progress'; saveState(); render(); };
   dt.appendChild(pb);
+
+  const db = document.createElement('button');
+  db.className = 'day-tab' + (state.view === 'debug' ? ' active' : '');
+  db.textContent = 'Storage Check';
+  db.onclick = function() { state.view = 'debug'; saveState(); render(); };
+  dt.appendChild(db);
 }
 
 function linkIcon() {
@@ -910,7 +923,7 @@ function renderContent() {
   if (isDayComplete(state.day)) {
     const doneBanner = document.createElement('div');
     doneBanner.className = 'day-complete-banner';
-    doneBanner.textContent = 'Day complete — nice work. Your entries are still shown below.';
+    doneBanner.textContent = 'Day complete, nice work. Your entries are still shown below.';
     content.appendChild(doneBanner);
     content.classList.add('day-complete');
   }
@@ -1024,7 +1037,7 @@ function renderCheckpoints() {
 
   const intro = document.createElement('div');
   intro.className = 'banner';
-  intro.innerHTML = '<strong>Monthly checkpoints — Cycle ' + state.cycle + ':</strong> log your numbers at the start, week 4, and week 8 to see real progress. Take front, side, and back photos on your phone at each checkpoint and keep them in an album named for the date.';
+  intro.innerHTML = '<strong>Monthly checkpoints - Cycle ' + state.cycle + ':</strong> log your numbers at the start, week 4, and week 8 to see real progress. Take front, side, and back photos on your phone at each checkpoint and keep them in an album named for the date.';
   cc.appendChild(intro);
 
   const checkpointDefs = [
@@ -1083,12 +1096,12 @@ function renderProgress() {
 
   const intro = document.createElement('div');
   intro.className = 'banner';
-  intro.innerHTML = '<strong>Exercise progress — Cycle ' + state.cycle + ':</strong> every weighted exercise logged so far, tracked across weeks and past cycles so you can see real improvement.';
+  intro.innerHTML = '<strong>Exercise progress - Cycle ' + state.cycle + ':</strong> every weighted exercise logged so far, tracked across weeks and past cycles so you can see real improvement.';
   pc.appendChild(intro);
 
   const restartWrap = document.createElement('div');
   restartWrap.className = 'card';
-  restartWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Finished this 8-week cycle?</p><p class="ex-scheme" style="margin-bottom:10px;">Starting a new cycle resets the week picker to Week 1 with clean inputs. All your past weights, dates, and checkpoints stay saved and keep showing on these graphs.</p>';
+  restartWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Finished this 8-week cycle?</p><p class="ex-scheme" style="margin-bottom:10px;">Starting a new cycle resets the week picker to Week 1 with clean inputs. All past weights, dates, and checkpoints stay saved and keep showing on these graphs.</p>';
   const restartBtn = document.createElement('button');
   restartBtn.textContent = 'Start Cycle ' + (state.cycle + 1);
   restartBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;';
@@ -1136,13 +1149,13 @@ function renderProgress() {
       const card = document.createElement('div');
       card.className = 'progress-ex-card';
       const h = document.createElement('h4');
-      h.textContent = ex.name + ' — ' + day.label;
+      h.textContent = ex.name + ' - ' + day.label;
       card.appendChild(h);
 
       if (entries.length < 2) {
         const nd = document.createElement('div');
         nd.className = 'no-data';
-        nd.textContent = entries.length === 0 ? 'No weights logged yet' : ('1 entry logged (Week ' + entries[0].week + ': ' + entries[0].weight + ' lbs) — need 2+ to graph');
+        nd.textContent = entries.length === 0 ? 'No weights logged yet' : ('1 entry logged (Week ' + entries[0].week + ': ' + entries[0].weight + ' lbs) - need 2+ to graph');
         card.appendChild(nd);
         pc.appendChild(card);
         continue;
@@ -1165,15 +1178,56 @@ function renderProgress() {
   }
 }
 
+function renderDebug() {
+  const dc = document.getElementById('debug-content');
+  dc.innerHTML = '';
+
+  const intro = document.createElement('div');
+  intro.className = 'banner';
+  intro.innerHTML = '<strong>Storage check:</strong> this shows exactly what is saved on this phone right now.';
+  dc.appendChild(intro);
+
+  const oldRaw = localStorage.getItem('workout-state');
+  const newRaw = localStorage.getItem('workout-state-v2');
+
+  const oldCard = document.createElement('div');
+  oldCard.className = 'progress-ex-card';
+  const oldCount = oldRaw ? Object.keys(JSON.parse(oldRaw).weights || {}).length : 0;
+  oldCard.innerHTML = '<h4>Old data (workout-state)</h4><p style="font-size:13px;">' + (oldRaw ? ('Found. Contains ' + oldCount + ' logged entries.') : 'Not found on this device.') + '</p>';
+  dc.appendChild(oldCard);
+
+  const newCard = document.createElement('div');
+  newCard.className = 'progress-ex-card';
+  const newCount = newRaw ? Object.keys(JSON.parse(newRaw).weights || {}).length : 0;
+  newCard.innerHTML = '<h4>New data (workout-state-v2)</h4><p style="font-size:13px;">' + (newRaw ? ('Found. Contains ' + newCount + ' logged entries.') : 'Not found on this device.') + '</p>';
+  dc.appendChild(newCard);
+
+  if (oldRaw && oldCount > 0) {
+    const migrateBtn = document.createElement('button');
+    migrateBtn.textContent = 'Force import old data now';
+    migrateBtn.style.cssText = 'width:100%;padding:12px;background:#e8722c;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;margin-top:10px;';
+    migrateBtn.onclick = function() {
+      const migratedWeights = Object.assign({}, state.weights, migrateOldData(oldRaw));
+      state.weights = migratedWeights;
+      saveState();
+      toast('Import complete');
+      render();
+    };
+    dc.appendChild(migrateBtn);
+  }
+}
+
 function render() {
   renderWeekPicker();
   renderDayTabs();
   const dayContent = document.getElementById('content');
   const cpContent = document.getElementById('checkpoint-content');
   const progContent = document.getElementById('progress-content');
+  const debugContent = document.getElementById('debug-content');
   dayContent.style.display = 'none';
   cpContent.style.display = 'none';
   progContent.style.display = 'none';
+  debugContent.style.display = 'none';
 
   if (state.view === 'checkpoints') {
     cpContent.style.display = 'block';
@@ -1181,6 +1235,9 @@ function render() {
   } else if (state.view === 'progress') {
     progContent.style.display = 'block';
     renderProgress();
+  } else if (state.view === 'debug') {
+    debugContent.style.display = 'block';
+    renderDebug();
   } else {
     dayContent.style.display = 'block';
     renderContent();
