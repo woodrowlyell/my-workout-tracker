@@ -566,6 +566,33 @@ async function loadState() {
     if (raw) {
       const parsed = JSON.parse(raw);
       state = Object.assign({}, state, parsed);
+    } else {
+      const old = localStorage.getItem('workout-state');
+      if (old) {
+        const parsedOld = JSON.parse(old);
+        const migratedWeights = {};
+        if (parsedOld.weights) {
+          Object.keys(parsedOld.weights).forEach(function(oldKey) {
+            const match = oldKey.match(/^(.+)::w(\d+)$/);
+            if (match) {
+              const base = match[1];
+              const week = match[2];
+              const oldVal = parsedOld.weights[oldKey];
+              const weightVal = (typeof oldVal === 'object' && oldVal !== null) ? oldVal.weight : oldVal;
+              if (weightVal) {
+                const newKey = base + '::c1::w' + week;
+                migratedWeights[newKey] = {
+                  weight: weightVal,
+                  date: (typeof oldVal === 'object' && oldVal.date) ? oldVal.date : todayStr()
+                };
+              }
+            }
+          });
+        }
+        state = Object.assign({}, state, parsedOld, { weights: migratedWeights, cycle: 1 });
+        saveState();
+        toast('Old data imported');
+      }
     }
   } catch (e) {}
   render();
