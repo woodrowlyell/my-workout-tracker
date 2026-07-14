@@ -22,6 +22,34 @@
   }
   .header h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
   .header .sub { font-size: 12px; color: #b8b7b0; }
+  .restrict-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #2a2a27;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    font-size: 12px;
+  }
+  .restrict-toggle .label { color: #d5d4cd; font-weight: 600; }
+  .switch {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: #555; border-radius: 24px; transition: 0.2s;
+  }
+  .slider:before {
+    content: ""; position: absolute; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s;
+  }
+  input:checked + .slider { background: #e8722c; }
+  input:checked + .slider:before { transform: translateX(18px); }
   .week-picker {
     display: flex;
     gap: 6px;
@@ -53,7 +81,7 @@
     background: #fff;
     border-bottom: 1px solid #e2e0d8;
     position: sticky;
-    top: 96px;
+    top: 0;
     z-index: 9;
   }
   .day-tab {
@@ -81,6 +109,11 @@
     color: #7a4a1c;
     margin-bottom: 14px;
     line-height: 1.4;
+  }
+  .restrict-banner {
+    background: #eef3fb;
+    border: 1px solid #b9cdf0;
+    color: #1c3a7a;
   }
   .section-label {
     font-size: 11px;
@@ -151,7 +184,7 @@
     color: #888;
     flex-shrink: 0;
   }
-  .weight-row input {
+  .weight-row input[type=number] {
     flex: 1;
     min-width: 0;
     padding: 8px 10px;
@@ -162,11 +195,40 @@
     background: #fafaf8;
   }
   .weight-row .unit { font-size: 12px; color: #999; flex-shrink: 0; }
+  .date-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .date-row label { font-size: 11px; color: #999; flex-shrink: 0; }
+  .date-row input[type=date] {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #555;
+  }
   .prev-weight {
     font-size: 11px;
     color: #999;
     margin-top: 4px;
   }
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0efe9;
+  }
+  .check-row input[type=checkbox] {
+    width: 20px;
+    height: 20px;
+    accent-color: #e8722c;
+  }
+  .check-row label { font-size: 13px; color: #555; font-weight: 600; }
   .simple-item {
     background: #fff;
     border: 1px solid #e6e4dc;
@@ -176,29 +238,6 @@
     font-size: 14px;
     line-height: 1.5;
   }
-  .goal-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .goal-card {
-    background: #fff;
-    border: 1px solid #e6e4dc;
-    border-radius: 10px;
-    padding: 10px 12px;
-  }
-  .goal-card .g-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.03em; }
-  .goal-card .g-val { font-size: 16px; font-weight: 700; margin-top: 2px; }
-  .prog-box {
-    background: #fff;
-    border: 1px solid #e6e4dc;
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin-bottom: 10px;
-    font-size: 13px;
-    line-height: 1.5;
-  }
-  .prog-box .p-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
   .checkpoint-card {
     background: #fff;
     border: 1px solid #e6e4dc;
@@ -246,31 +285,62 @@
     padding: 14px;
     text-align: center;
   }
+  .progress-ex-card {
+    background: #fff;
+    border: 1px solid #e6e4dc;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .progress-ex-card h4 {
+    margin: 0 0 8px;
+    font-size: 14px;
+  }
+  .progress-ex-card .no-data {
+    font-size: 12px;
+    color: #aaa;
+    padding: 10px 0;
+    text-align: center;
+  }
+  svg.chart { width: 100%; height: auto; display: block; }
+  .chart-stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: #888;
+  }
+  .chart-stats strong { color: #1c1c1a; font-size: 13px; }
+  .meas-section { margin-bottom: 20px; }
 </style>
 </head>
 <body>
 
+<div class="day-tabs" id="day-tabs"></div>
+
 <div class="header">
   <h1>8-week strength program</h1>
   <div class="sub" id="week-sub">Week 1 · Weeks 1-2: leave 2-3 reps in reserve</div>
+  <div class="restrict-toggle">
+    <span class="label">10 lb restriction mode</span>
+    <label class="switch">
+      <input type="checkbox" id="restrict-checkbox">
+      <span class="slider"></span>
+    </label>
+  </div>
   <div class="week-picker" id="week-picker"></div>
 </div>
 
-<div class="day-tabs" id="day-tabs"></div>
-
 <div class="content" id="content"></div>
-
 <div class="content" id="checkpoint-content" style="display:none"></div>
+<div class="content" id="progress-content" style="display:none"></div>
 
 <div class="save-toast" id="toast">Saved</div>
 
 <script>
 const YT = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-const PF = (slug) => `https://www.planetfitness.com/exercises/${slug}`;
 
 const mobility = {
-  type: 'mobility',
-  title: 'Mobility warm-up (5 min)',
   items: [
     '10 bodyweight squats',
     '10 arm circles forward/backward',
@@ -340,7 +410,7 @@ const days = {
       { name: 'Lat pulldown', scheme: '3 x 10', link: YT('lat pulldown proper form') },
       { name: 'Smith machine Romanian deadlift', scheme: '3 x 10', link: YT('smith machine romanian deadlift tutorial') },
       { name: 'Cable wood chop', scheme: '3 x 12 each side', link: YT('cable wood chop proper form') },
-      { name: 'Farmer carry', scheme: '3 x 45 sec', link: YT('farmer carry proper form') }
+      { name: 'Farmer carry', scheme: '3 x 45 sec', link: YT('farmer carry proper form'), noWeight: true }
     ],
     finisher: { name: 'Incline walk', scheme: '10 min', link: null }
   },
@@ -364,6 +434,60 @@ const days = {
   }
 };
 
+// 10lb restriction mode: no overhead pressing/raises. Chest/back/arm work below shoulder height OK.
+const restrictedDays = {
+  mon: {
+    label: 'Mon · Push',
+    warmup: { name: 'Treadmill', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Machine chest press (light)', scheme: '3 x 12', link: YT('machine chest press proper form'), note: '10 lb restriction: light resistance, focus on form' },
+      { name: 'Standing cable chest press', scheme: '3 x 12', link: YT('standing cable chest press form'), note: 'Chest-height, not overhead' },
+      { name: 'Triceps rope pushdown', scheme: '3 x 12', link: YT('triceps rope pushdown proper form'), note: 'Below shoulder height, safe under restriction' },
+      { name: 'Seated triceps kickback (light)', scheme: '3 x 12', link: YT('triceps kickback proper form') }
+    ],
+    finisher: { name: 'Incline treadmill', scheme: '10 min · lower incline as needed', link: null }
+  },
+  tue: {
+    label: 'Tue · Legs',
+    warmup: { name: 'Bike', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Bodyweight squat', scheme: '3 x 12', link: YT('bodyweight squat proper form') },
+      { name: 'Leg press (light)', scheme: '3 x 12', link: YT('leg press machine proper form'), note: 'Keep resistance at or under 10 lb equivalent' },
+      { name: 'Seated leg curl (light)', scheme: '3 x 12', link: YT('seated leg curl machine form') },
+      { name: 'Seated leg extension (light)', scheme: '3 x 12', link: YT('leg extension machine proper form') },
+      { name: 'Calf raise (bodyweight)', scheme: '3 x 15', link: YT('bodyweight calf raise proper form') },
+      { name: 'Glute bridge', scheme: '3 x 12', link: YT('glute bridge proper form'), noWeight: true }
+    ],
+    finisher: null
+  },
+  wed: days.wed,
+  thu: {
+    label: 'Thu · Pull',
+    warmup: { name: 'Row machine (light)', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Seated cable row (light)', scheme: '3 x 12', link: YT('seated cable row proper form'), note: 'Below shoulder height' },
+      { name: 'Chest supported row (light)', scheme: '3 x 12', link: YT('chest supported row machine form') },
+      { name: 'Straight-arm cable pulldown', scheme: '3 x 12', link: YT('straight arm pulldown proper form'), note: 'Not overhead — pulls down from a high position' },
+      { name: 'Seated hammer curl (light)', scheme: '3 x 12', link: YT('dumbbell hammer curl form') }
+    ],
+    finisher: { name: 'Flat walk', scheme: '10 min', link: null }
+  },
+  fri: {
+    label: 'Fri · Full body',
+    warmup: { name: 'Treadmill', scheme: '5 min', link: null },
+    exercises: [
+      { name: 'Bodyweight squat', scheme: '3 x 12', link: YT('bodyweight squat proper form') },
+      { name: 'Seated cable row (light)', scheme: '3 x 12', link: YT('seated cable row proper form') },
+      { name: 'Leg press (light)', scheme: '3 x 12', link: YT('leg press machine proper form') },
+      { name: 'Glute bridge', scheme: '3 x 12', link: YT('glute bridge proper form'), noWeight: true },
+      { name: 'Seated calf raise (light)', scheme: '3 x 15', link: YT('seated calf raise machine form') }
+    ],
+    finisher: { name: 'Flat walk', scheme: '10 min', link: null }
+  },
+  sat: days.sat,
+  sun: days.sun
+};
+
 const progressionText = {
   early: { title: 'Weeks 1-2', body: 'Choose a weight that is challenging but leaves 2-3 reps in reserve.' },
   mid: { title: 'Weeks 3-4', body: 'If you complete all sets and reps with good form, increase the weight by the smallest increment available next workout.' },
@@ -380,11 +504,19 @@ function getPhase(week) {
 
 let state = {
   week: 1,
+  cycle: 1,
   day: 'mon',
   view: 'day',
+  restricted: false,
   weights: {},
-  checkpoints: { start: {}, week4: {}, week8: {} }
+  checkpoints: { start: {}, week4: {}, week8: {} },
+  archivedCheckpoints: []
 };
+
+function todayStr() {
+  const d = new Date();
+  return d.toISOString().split('T')[0];
+}
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -395,10 +527,16 @@ function toast(msg) {
 
 async function loadState() {
   try {
-    const raw = localStorage.getItem('workout-state');
+    const raw = localStorage.getItem('workout-state-v2');
     if (raw) {
       const parsed = JSON.parse(raw);
       state = { ...state, ...parsed };
+    } else {
+      const old = localStorage.getItem('workout-state');
+      if (old) {
+        const parsedOld = JSON.parse(old);
+        state = { ...state, ...parsedOld };
+      }
     }
   } catch (e) {}
   render();
@@ -406,7 +544,7 @@ async function loadState() {
 
 async function saveState() {
   try {
-    localStorage.setItem('workout-state', JSON.stringify(state));
+    localStorage.setItem('workout-state-v2', JSON.stringify(state));
     toast('Saved');
   } catch (e) {
     toast('Save failed, try again');
@@ -417,12 +555,50 @@ function weightKey(day, exName) {
   return `${day}::${exName}`;
 }
 
+function getEntry(day, exName, week, cycle) {
+  const c = cycle !== undefined ? cycle : state.cycle;
+  const k = weightKey(day, exName) + `::c${c}::w${week}`;
+  return state.weights[k] || null;
+}
+
+function setEntry(day, exName, week, field, val) {
+  const k = weightKey(day, exName) + `::c${state.cycle}::w${week}`;
+  if (!state.weights[k]) state.weights[k] = {};
+  state.weights[k][field] = val;
+  saveState();
+}
+
+function clearEntry(day, exName, week) {
+  const k = weightKey(day, exName) + `::c${state.cycle}::w${week}`;
+  delete state.weights[k];
+  saveState();
+}
+
 function getPrevWeight(day, exName, week) {
   for (let w = week - 1; w >= 1; w--) {
-    const k = weightKey(day, exName) + `::w${w}`;
-    if (state.weights[k]) return { week: w, val: state.weights[k] };
+    const e = getEntry(day, exName, w);
+    if (e && e.weight) return { week: w, val: e.weight, date: e.date };
+  }
+  if (state.cycle > 1) {
+    for (let c = state.cycle - 1; c >= 1; c--) {
+      for (let w = 8; w >= 1; w--) {
+        const e = getEntry(day, exName, w, c);
+        if (e && e.weight) return { week: w, val: e.weight, date: e.date, cycle: c };
+      }
+    }
   }
   return null;
+}
+
+function getAllEntries(day, exName) {
+  const results = [];
+  for (let c = 1; c <= state.cycle; c++) {
+    for (let w = 1; w <= 8; w++) {
+      const e = getEntry(day, exName, w, c);
+      if (e && e.weight) results.push({ week: w, cycle: c, weight: parseFloat(e.weight), date: e.date });
+    }
+  }
+  return results;
 }
 
 function renderWeekPicker() {
@@ -436,16 +612,21 @@ function renderWeekPicker() {
     wp.appendChild(b);
   }
   const phase = progressionText[getPhase(state.week)];
-  document.getElementById('week-sub').textContent = `Week ${state.week} · ${phase.title}: ${phase.body.split('.')[0]}.`;
+  document.getElementById('week-sub').textContent = `Cycle ${state.cycle} · Week ${state.week} · ${phase.title}: ${phase.body.split('.')[0]}.`;
+
+  const cb = document.getElementById('restrict-checkbox');
+  cb.checked = state.restricted;
+  cb.onchange = () => { state.restricted = cb.checked; saveState(); render(); };
 }
 
 function renderDayTabs() {
   const dt = document.getElementById('day-tabs');
   dt.innerHTML = '';
-  Object.keys(days).forEach(key => {
+  const dayset = state.restricted ? restrictedDays : days;
+  Object.keys(dayset).forEach(key => {
     const b = document.createElement('button');
-    b.className = 'day-tab' + (state.day === key && state.view !== 'checkpoints' ? ' active' : '');
-    b.textContent = days[key].label;
+    b.className = 'day-tab' + (state.day === key && state.view === 'day' ? ' active' : '');
+    b.textContent = dayset[key].label;
     b.onclick = () => { state.day = key; state.view = 'day'; saveState(); render(); };
     dt.appendChild(b);
   });
@@ -454,6 +635,12 @@ function renderDayTabs() {
   cb.textContent = 'Checkpoints';
   cb.onclick = () => { state.view = 'checkpoints'; saveState(); render(); };
   dt.appendChild(cb);
+
+  const pb = document.createElement('button');
+  pb.className = 'day-tab' + (state.view === 'progress' ? ' active' : '');
+  pb.textContent = 'Progress';
+  pb.onclick = () => { state.view = 'progress'; saveState(); render(); };
+  dt.appendChild(pb);
 }
 
 function linkIcon() {
@@ -488,29 +675,69 @@ function renderExerciseCard(day, ex, isWarmup, isFinisher) {
     card.appendChild(note);
   }
 
-  if (!isWarmup && !isFinisher && !ex.noWeight) {
-    const key = weightKey(day, ex.name);
-    const wkKey = key + `::w${state.week}`;
-    const row = document.createElement('div');
-    row.className = 'weight-row';
-    row.innerHTML = `
-      <label>This week</label>
-      <input type="number" inputmode="decimal" placeholder="0" value="${state.weights[wkKey] || ''}" />
-      <span class="unit">lbs</span>
-    `;
-    const input = row.querySelector('input');
-    input.addEventListener('change', () => {
-      state.weights[wkKey] = input.value;
-      saveState();
-    });
-    card.appendChild(row);
+  if (!isWarmup && !isFinisher) {
+    if (ex.noWeight) {
+      const entry = getEntry(day, ex.name, state.week) || {};
+      const row = document.createElement('div');
+      row.className = 'check-row';
+      row.innerHTML = `<input type="checkbox" ${entry.done ? 'checked' : ''} /> <label>Completed this week</label>`;
+      const input = row.querySelector('input');
+      input.addEventListener('change', () => {
+        setEntry(day, ex.name, state.week, 'done', input.checked);
+        setEntry(day, ex.name, state.week, 'date', todayStr());
+      });
+      card.appendChild(row);
+    } else {
+      const entry = getEntry(day, ex.name, state.week) || {};
+      const row = document.createElement('div');
+      row.className = 'weight-row';
+      row.innerHTML = `
+        <label>This week</label>
+        <input type="number" inputmode="decimal" placeholder="0" value="${entry.weight || ''}" />
+        <span class="unit">lbs</span>
+      `;
+      const input = row.querySelector('input');
+      input.addEventListener('change', () => {
+        if (input.value) {
+          setEntry(day, ex.name, state.week, 'weight', input.value);
+          setEntry(day, ex.name, state.week, 'date', todayStr());
+        } else {
+          clearEntry(day, ex.name, state.week);
+        }
+        render();
+      });
+      card.appendChild(row);
 
-    const prev = getPrevWeight(day, ex.name, state.week);
-    if (prev) {
-      const p = document.createElement('div');
-      p.className = 'prev-weight';
-      p.textContent = `Week ${prev.week}: ${prev.val} lbs`;
-      card.appendChild(p);
+      if (entry.date) {
+        const dateNote = document.createElement('div');
+        dateNote.className = 'prev-weight';
+        dateNote.style.marginTop = '4px';
+        dateNote.textContent = `Logged: ${entry.date}`;
+        card.appendChild(dateNote);
+      }
+
+      const prev = getPrevWeight(day, ex.name, state.week);
+      if (prev) {
+        const p = document.createElement('div');
+        p.className = 'prev-weight';
+        const cycleTag = prev.cycle ? `Cycle ${prev.cycle}, ` : '';
+        p.textContent = `${cycleTag}Week ${prev.week}${prev.date ? ' (' + prev.date + ')' : ''}: ${prev.val} lbs`;
+        card.appendChild(p);
+      }
+
+      const allPast = getAllEntries(day, ex.name).filter(e => !(e.week === state.week && e.cycle === state.cycle));
+      if (allPast.length > 1) {
+        const histWrap = document.createElement('div');
+        histWrap.style.cssText = 'margin-top:6px;padding-top:6px;border-top:1px dashed #eee;';
+        allPast.slice().reverse().forEach(e => {
+          const line = document.createElement('div');
+          line.className = 'prev-weight';
+          const cTag = state.cycle > 1 ? `C${e.cycle} ` : '';
+          line.textContent = `${cTag}Week ${e.week} (${e.date || 'no date'}): ${e.weight} lbs`;
+          histWrap.appendChild(line);
+        });
+        card.appendChild(histWrap);
+      }
     }
   }
 
@@ -520,7 +747,15 @@ function renderExerciseCard(day, ex, isWarmup, isFinisher) {
 function renderContent() {
   const content = document.getElementById('content');
   content.innerHTML = '';
-  const day = days[state.day];
+  const dayset = state.restricted ? restrictedDays : days;
+  const day = dayset[state.day] || dayset[Object.keys(dayset)[0]];
+
+  if (state.restricted) {
+    const rb = document.createElement('div');
+    rb.className = 'banner restrict-banner';
+    rb.innerHTML = '<strong>10 lb restriction mode:</strong> overhead pressing and raises are excluded. All movements shown are at or below shoulder height. Confirm with your doctor before progressing.';
+    content.appendChild(rb);
+  }
 
   if (day.rest) {
     const banner = document.createElement('div');
@@ -530,11 +765,13 @@ function renderContent() {
     return;
   }
 
-  const banner = document.createElement('div');
-  banner.className = 'banner';
-  const phase = progressionText[getPhase(state.week)];
-  banner.innerHTML = `<strong>${phase.title}:</strong> ${phase.body}`;
-  content.appendChild(banner);
+  if (!state.restricted) {
+    const banner = document.createElement('div');
+    banner.className = 'banner';
+    const phase = progressionText[getPhase(state.week)];
+    banner.innerHTML = `<strong>${phase.title}:</strong> ${phase.body}`;
+    content.appendChild(banner);
+  }
 
   const mobLabel = document.createElement('div');
   mobLabel.className = 'section-label';
@@ -588,7 +825,7 @@ function renderCheckpoints() {
 
   const intro = document.createElement('div');
   intro.className = 'banner';
-  intro.innerHTML = '<strong>Monthly checkpoints:</strong> log your numbers at the start, week 4, and week 8 to see real progress. Take front, side, and back photos on your phone at each checkpoint and keep them in an album named for the date.';
+  intro.innerHTML = `<strong>Monthly checkpoints — Cycle ${state.cycle}:</strong> log your numbers at the start, week 4, and week 8 to see real progress. Take front, side, and back photos on your phone at each checkpoint and keep them in an album named for the date.`;
   cc.appendChild(intro);
 
   const checkpointDefs = [
@@ -613,6 +850,160 @@ function renderCheckpoints() {
 
     cc.appendChild(card);
   });
+
+  const measLabel = document.createElement('div');
+  measLabel.className = 'section-label';
+  measLabel.textContent = 'Measurement trend (all cycles)';
+  cc.appendChild(measLabel);
+
+  let allPoints = [];
+  (state.archivedCheckpoints || []).forEach(arch => {
+    checkpointDefs.forEach(def => {
+      allPoints.push({
+        label: `C${arch.cycle} ${def.title}`,
+        weight: parseFloat(arch[def.key]?.weight) || null,
+        waist: parseFloat(arch[def.key]?.waist) || null
+      });
+    });
+  });
+  checkpointDefs.forEach(def => {
+    allPoints.push({
+      label: (state.cycle > 1 ? `C${state.cycle} ` : '') + def.title,
+      weight: parseFloat(state.checkpoints[def.key]?.weight) || null,
+      waist: parseFloat(state.checkpoints[def.key]?.waist) || null
+    });
+  });
+
+  cc.appendChild(buildLineChart('Weight (lbs)', allPoints.map(p => ({ label: p.label, val: p.weight })), '#e8722c'));
+  cc.appendChild(buildLineChart('Waist (in)', allPoints.map(p => ({ label: p.label, val: p.waist })), '#3a7ae8'));
+}
+
+function buildLineChart(title, points, color) {
+  const wrap = document.createElement('div');
+  wrap.className = 'progress-ex-card';
+  const h = document.createElement('h4');
+  h.textContent = title;
+  wrap.appendChild(h);
+
+  const valid = points.filter(p => p.val !== null && !isNaN(p.val));
+  if (valid.length < 2) {
+    const nd = document.createElement('div');
+    nd.className = 'no-data';
+    nd.textContent = valid.length === 0 ? 'No data entered yet' : 'Need at least 2 data points to graph';
+    wrap.appendChild(nd);
+    return wrap;
+  }
+
+  const W = 320, H = 140, pad = 30;
+  const vals = valid.map(p => p.val);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  const stepX = (W - pad * 2) / (points.length - 1);
+
+  let pathD = '';
+  let dots = '';
+  let labels = '';
+  points.forEach((p, i) => {
+    const x = pad + i * stepX;
+    if (p.val === null || isNaN(p.val)) return;
+    const y = H - pad - ((p.val - min) / range) * (H - pad * 2);
+    pathD += (pathD ? 'L' : 'M') + x + ',' + y + ' ';
+    dots += `<circle cx="${x}" cy="${y}" r="4" fill="${color}"/>`;
+    labels += `<text x="${x}" y="${H - 6}" font-size="10" fill="#999" text-anchor="middle">${p.label}</text>`;
+    labels += `<text x="${x}" y="${y - 10}" font-size="11" fill="#333" text-anchor="middle" font-weight="600">${p.val}</text>`;
+  });
+
+  const svg = `<svg class="chart" viewBox="0 0 ${W} ${H}">
+    <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2.5"/>
+    ${dots}${labels}
+  </svg>`;
+  wrap.innerHTML += svg;
+
+  const first = valid[0].val, last = valid[valid.length - 1].val;
+  const diff = (last - first).toFixed(1);
+  const stats = document.createElement('div');
+  stats.className = 'chart-stats';
+  stats.innerHTML = `<div>Start: <strong>${first}</strong></div><div>Latest: <strong>${last}</strong></div><div>Change: <strong>${diff > 0 ? '+' : ''}${diff}</strong></div>`;
+  wrap.appendChild(stats);
+
+  return wrap;
+}
+
+function renderProgress() {
+  const pc = document.getElementById('progress-content');
+  pc.innerHTML = '';
+
+  const intro = document.createElement('div');
+  intro.className = 'banner';
+  intro.innerHTML = `<strong>Exercise progress — Cycle ${state.cycle}:</strong> every weighted exercise you've logged, tracked across weeks and past cycles so you can see real improvement.`;
+  pc.appendChild(intro);
+
+  const restartWrap = document.createElement('div');
+  restartWrap.className = 'card';
+  restartWrap.innerHTML = `
+    <p class="ex-name" style="margin-bottom:6px;">Finished this 8-week cycle?</p>
+    <p class="ex-scheme" style="margin-bottom:10px;">Starting a new cycle resets the week picker to Week 1 with clean inputs. All your past weights, dates, and checkpoints stay saved and keep showing on these graphs.</p>
+  `;
+  const restartBtn = document.createElement('button');
+  restartBtn.textContent = `Start Cycle ${state.cycle + 1}`;
+  restartBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;';
+  restartBtn.onclick = () => {
+    if (confirm(`Start Cycle ${state.cycle + 1}? Your Cycle ${state.cycle} data will stay saved for progress tracking, and the week picker will reset to Week 1.`)) {
+      if (state.checkpoints && (state.checkpoints.start?.weight || state.checkpoints.week4?.weight || state.checkpoints.week8?.weight)) {
+        state.archivedCheckpoints.push({ cycle: state.cycle, ...state.checkpoints });
+      }
+      state.checkpoints = { start: {}, week4: {}, week8: {} };
+      state.cycle += 1;
+      state.week = 1;
+      state.view = 'day';
+      saveState();
+      render();
+    }
+  };
+  restartWrap.appendChild(restartBtn);
+  pc.appendChild(restartWrap);
+
+  const dayset = state.restricted ? restrictedDays : days;
+  const seen = new Set();
+
+  Object.keys(dayset).forEach(dayKey => {
+    const day = dayset[dayKey];
+    if (day.rest) return;
+    day.exercises.forEach(ex => {
+      if (ex.noWeight) return;
+      const uniqueKey = dayKey + '::' + ex.name;
+      if (seen.has(uniqueKey)) return;
+      seen.add(uniqueKey);
+
+      const entries = getAllEntries(dayKey, ex.name);
+      const card = document.createElement('div');
+      card.className = 'progress-ex-card';
+      const h = document.createElement('h4');
+      h.textContent = `${ex.name} — ${day.label}`;
+      card.appendChild(h);
+
+      if (entries.length < 2) {
+        const nd = document.createElement('div');
+        nd.className = 'no-data';
+        nd.textContent = entries.length === 0 ? 'No weights logged yet' : `1 entry logged (Week ${entries[0].week}: ${entries[0].weight} lbs) — need 2+ to graph`;
+        card.appendChild(nd);
+        pc.appendChild(card);
+        return;
+      }
+
+      const points = entries.map(e => ({ label: (state.cycle > 1 ? 'C' + e.cycle + 'W' + e.week : 'Wk' + e.week), val: e.weight }));
+      const chartCard = buildLineChart('', points, '#e8722c');
+      card.innerHTML += chartCard.innerHTML;
+      pc.appendChild(card);
+    });
+  });
+
+  if (seen.size === 0) {
+    const nd = document.createElement('div');
+    nd.className = 'rest-note';
+    nd.textContent = 'No weighted exercises in the current mode.';
+    pc.appendChild(nd);
+  }
 }
 
 function render() {
@@ -620,13 +1011,19 @@ function render() {
   renderDayTabs();
   const dayContent = document.getElementById('content');
   const cpContent = document.getElementById('checkpoint-content');
+  const progContent = document.getElementById('progress-content');
+  dayContent.style.display = 'none';
+  cpContent.style.display = 'none';
+  progContent.style.display = 'none';
+
   if (state.view === 'checkpoints') {
-    dayContent.style.display = 'none';
     cpContent.style.display = 'block';
     renderCheckpoints();
+  } else if (state.view === 'progress') {
+    progContent.style.display = 'block';
+    renderProgress();
   } else {
     dayContent.style.display = 'block';
-    cpContent.style.display = 'none';
     renderContent();
   }
 }
