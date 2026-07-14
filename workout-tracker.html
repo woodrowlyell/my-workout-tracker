@@ -285,6 +285,26 @@
     padding: 14px;
     text-align: center;
   }
+  .content.day-complete .card,
+  .content.day-complete .simple-item {
+    background: rgba(76, 175, 80, 0.14);
+    border-color: rgba(76, 175, 80, 0.4);
+  }
+  .day-complete-banner {
+    background: rgba(76, 175, 80, 0.16);
+    border: 1px solid rgba(76, 175, 80, 0.45);
+    color: #256029;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .tab-check {
+    color: #4caf50;
+    font-weight: 900;
+    margin-left: 4px;
+  }
   .progress-ex-card {
     background: #fff;
     border: 1px solid #e6e4dc;
@@ -601,7 +621,46 @@ function getAllEntries(day, exName) {
   return results;
 }
 
-function renderWeekPicker() {
+function isDayComplete(dayKey) {
+  const dayset = state.restricted ? restrictedDays : days;
+  const day = dayset[dayKey];
+  if (!day || day.rest) return false;
+
+  const mobEntry = getEntry(dayKey, '__mobility__', state.week);
+  if (!mobEntry || !mobEntry.done) return false;
+
+  const cardioEntry = getEntry(dayKey, '__cardio_warmup__', state.week);
+  if (!cardioEntry || !cardioEntry.done) return false;
+
+  for (const ex of day.exercises) {
+    const e = getEntry(dayKey, ex.name, state.week);
+    if (ex.noWeight) {
+      if (!e || !e.done) return false;
+    } else {
+      if (!e || !e.weight) return false;
+    }
+  }
+
+  if (day.finisher) {
+    const finEntry = getEntry(dayKey, '__finisher__', state.week);
+    if (!finEntry || !finEntry.done) return false;
+  }
+
+  return true;
+}
+
+function isWeekComplete(week) {
+  const dayset = state.restricted ? restrictedDays : days;
+  const savedWeek = state.week;
+  state.week = week;
+  let allDone = true;
+  for (const key of Object.keys(dayset)) {
+    if (dayset[key].rest) continue;
+    if (!isDayComplete(key)) { allDone = false; break; }
+  }
+  state.week = savedWeek;
+  return allDone;
+}
   const wp = document.getElementById('week-picker');
   wp.innerHTML = '';
   for (let i = 1; i <= 8; i++) {
@@ -626,7 +685,7 @@ function renderDayTabs() {
   Object.keys(dayset).forEach(key => {
     const b = document.createElement('button');
     b.className = 'day-tab' + (state.day === key && state.view === 'day' ? ' active' : '');
-    b.textContent = dayset[key].label;
+    b.innerHTML = dayset[key].label + (isDayComplete(key) ? '<span class="tab-check">✓</span>' : '');
     b.onclick = () => { state.day = key; state.view = 'day'; saveState(); render(); };
     dt.appendChild(b);
   });
@@ -744,9 +803,31 @@ function renderExerciseCard(day, ex, isWarmup, isFinisher) {
   return card;
 }
 
+function renderTrackedBlock(dayKey, blockKey, label) {
+  const wrap = document.createElement('div');
+  wrap.className = 'simple-item';
+  const mobHtml = blockKey === '__mobility__'
+    ? mobility.items.map(i => `<div style="padding:2px 0">${i}</div>`).join('')
+    : '';
+  const entry = getEntry(dayKey, blockKey, state.week) || {};
+  wrap.innerHTML = mobHtml;
+  const checkRow = document.createElement('div');
+  checkRow.className = 'check-row';
+  checkRow.innerHTML = `<input type="checkbox" ${entry.done ? 'checked' : ''} /> <label>${label}</label>`;
+  const input = checkRow.querySelector('input');
+  input.addEventListener('change', () => {
+    setEntry(dayKey, blockKey, state.week, 'done', input.checked);
+    setEntry(dayKey, blockKey, state.week, 'date', todayStr());
+    render();
+  });
+  wrap.appendChild(checkRow);
+  return wrap;
+}
+
 function renderContent() {
   const content = document.getElementById('content');
   content.innerHTML = '';
+  content.classList.remove('day-complete');
   const dayset = state.restricted ? restrictedDays : days;
   const day = dayset[state.day] || dayset[Object.keys(dayset)[0]];
 
@@ -765,6 +846,14 @@ function renderContent() {
     return;
   }
 
+  if (isDayComplete(state.day)) {
+    const doneBanner = document.createElement('div');
+    doneBanner.className = 'day-complete-banner';
+    doneBanner.textContent = '✓ Day complete — nice work. Your entries are still shown below.';
+    content.appendChild(doneBanner);
+    content.classList.add('day-complete');
+  }
+
   if (!state.restricted) {
     const banner = document.createElement('div');
     banner.className = 'banner';
@@ -777,16 +866,14 @@ function renderContent() {
   mobLabel.className = 'section-label';
   mobLabel.textContent = 'Mobility warm-up';
   content.appendChild(mobLabel);
-  const mobCard = document.createElement('div');
-  mobCard.className = 'simple-item';
-  mobCard.innerHTML = mobility.items.map(i => `<div style="padding:2px 0">${i}</div>`).join('');
-  content.appendChild(mobCard);
+  content.appendChild(renderTrackedBlock(state.day, '__mobility__', 'Completed mobility warm-up'));
 
   const cardioLabel = document.createElement('div');
   cardioLabel.className = 'section-label';
   cardioLabel.textContent = 'Cardio warm-up';
   content.appendChild(cardioLabel);
   content.appendChild(renderExerciseCard(state.day, day.warmup, true, false));
+  content.appendChild(renderTrackedBlock(state.day, '__cardio_warmup__', 'Completed cardio warm-up'));
 
   const exLabel = document.createElement('div');
   exLabel.className = 'section-label';
@@ -802,6 +889,7 @@ function renderContent() {
     finLabel.textContent = 'Cooldown cardio';
     content.appendChild(finLabel);
     content.appendChild(renderExerciseCard(state.day, day.finisher, false, true));
+    content.appendChild(renderTrackedBlock(state.day, '__finisher__', 'Completed cooldown cardio'));
   }
 }
 
