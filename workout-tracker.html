@@ -131,6 +131,11 @@
     padding: 12px 14px;
     margin-bottom: 10px;
   }
+  .card.ex-complete,
+  .simple-item.ex-complete {
+    background: rgba(76, 175, 80, 0.14);
+    border-color: rgba(76, 175, 80, 0.4);
+  }
   .ex-top {
     display: flex;
     justify-content: space-between;
@@ -195,21 +200,6 @@
     background: #fafaf8;
   }
   .weight-row .unit { font-size: 12px; color: #999; flex-shrink: 0; }
-  .date-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 8px;
-  }
-  .date-row label { font-size: 11px; color: #999; flex-shrink: 0; }
-  .date-row input[type=date] {
-    flex: 1;
-    padding: 6px 8px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 13px;
-    color: #555;
-  }
   .prev-weight {
     font-size: 11px;
     color: #999;
@@ -331,7 +321,6 @@
     color: #888;
   }
   .chart-stats strong { color: #1c1c1a; font-size: 13px; }
-  .meas-section { margin-bottom: 20px; }
 </style>
 </head>
 <body>
@@ -340,7 +329,7 @@
 
 <div class="header">
   <h1>8-week strength program</h1>
-  <div class="sub" id="week-sub">Week 1 · Weeks 1-2: leave 2-3 reps in reserve</div>
+  <div class="sub" id="week-sub">Cycle 1 · Week 1 · Weeks 1-2: leave 2-3 reps in reserve</div>
   <div class="restrict-toggle">
     <span class="label">10 lb restriction mode</span>
     <label class="switch">
@@ -454,7 +443,6 @@ const days = {
   }
 };
 
-// 10lb restriction mode: no overhead pressing/raises. Chest/back/arm work below shoulder height OK.
 const restrictedDays = {
   mon: {
     label: 'Mon · Push',
@@ -480,7 +468,18 @@ const restrictedDays = {
     ],
     finisher: null
   },
-  wed: days.wed,
+  wed: {
+    label: 'Wed · Recovery',
+    rest: true,
+    items: [
+      '10,000+ steps today',
+      'Stretch: hamstrings',
+      'Stretch: hip flexors',
+      'Stretch: chest',
+      'Stretch: upper back',
+      'Optional: 20-30 min easy walk'
+    ]
+  },
   thu: {
     label: 'Thu · Pull',
     warmup: { name: 'Row machine (light)', scheme: '5 min', link: null },
@@ -504,8 +503,24 @@ const restrictedDays = {
     ],
     finisher: { name: 'Flat walk', scheme: '10 min', link: null }
   },
-  sat: days.sat,
-  sun: days.sun
+  sat: {
+    label: 'Sat · Cardio',
+    rest: true,
+    items: [
+      '45-60 min walk, OR bike for 30 min',
+      'Goal: 10,000-12,000 steps'
+    ]
+  },
+  sun: {
+    label: 'Sun · Rest',
+    rest: true,
+    items: [
+      'Rest',
+      'Stretch',
+      'Foam roll',
+      'Walk if desired'
+    ]
+  }
 };
 
 const progressionText = {
@@ -550,13 +565,7 @@ async function loadState() {
     const raw = localStorage.getItem('workout-state-v2');
     if (raw) {
       const parsed = JSON.parse(raw);
-      state = { ...state, ...parsed };
-    } else {
-      const old = localStorage.getItem('workout-state');
-      if (old) {
-        const parsedOld = JSON.parse(old);
-        state = { ...state, ...parsedOld };
-      }
+      state = Object.assign({}, state, parsed);
     }
   } catch (e) {}
   render();
@@ -572,24 +581,24 @@ async function saveState() {
 }
 
 function weightKey(day, exName) {
-  return `${day}::${exName}`;
+  return day + '::' + exName;
 }
 
 function getEntry(day, exName, week, cycle) {
   const c = cycle !== undefined ? cycle : state.cycle;
-  const k = weightKey(day, exName) + `::c${c}::w${week}`;
+  const k = weightKey(day, exName) + '::c' + c + '::w' + week;
   return state.weights[k] || null;
 }
 
 function setEntry(day, exName, week, field, val) {
-  const k = weightKey(day, exName) + `::c${state.cycle}::w${week}`;
+  const k = weightKey(day, exName) + '::c' + state.cycle + '::w' + week;
   if (!state.weights[k]) state.weights[k] = {};
   state.weights[k][field] = val;
   saveState();
 }
 
 function clearEntry(day, exName, week) {
-  const k = weightKey(day, exName) + `::c${state.cycle}::w${week}`;
+  const k = weightKey(day, exName) + '::c' + state.cycle + '::w' + week;
   delete state.weights[k];
   saveState();
 }
@@ -632,7 +641,8 @@ function isDayComplete(dayKey) {
   const cardioEntry = getEntry(dayKey, '__cardio_warmup__', state.week);
   if (!cardioEntry || !cardioEntry.done) return false;
 
-  for (const ex of day.exercises) {
+  for (let i = 0; i < day.exercises.length; i++) {
+    const ex = day.exercises[i];
     const e = getEntry(dayKey, ex.name, state.week);
     if (ex.noWeight) {
       if (!e || !e.done) return false;
@@ -654,56 +664,67 @@ function isWeekComplete(week) {
   const savedWeek = state.week;
   state.week = week;
   let allDone = true;
-  for (const key of Object.keys(dayset)) {
+  const keys = Object.keys(dayset);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
     if (dayset[key].rest) continue;
     if (!isDayComplete(key)) { allDone = false; break; }
   }
   state.week = savedWeek;
   return allDone;
 }
+
+function renderWeekPicker() {
   const wp = document.getElementById('week-picker');
   wp.innerHTML = '';
   for (let i = 1; i <= 8; i++) {
     const b = document.createElement('button');
     b.className = 'week-btn' + (state.week === i ? ' active' : '');
-    b.textContent = 'Wk ' + i;
-    b.onclick = () => { state.week = i; saveState(); render(); };
+    b.innerHTML = 'Wk ' + i + (isWeekComplete(i) ? '<span class="tab-check">&#10003;</span>' : '');
+    b.onclick = (function(i) {
+      return function() { state.week = i; saveState(); render(); };
+    })(i);
     wp.appendChild(b);
   }
   const phase = progressionText[getPhase(state.week)];
-  document.getElementById('week-sub').textContent = `Cycle ${state.cycle} · Week ${state.week} · ${phase.title}: ${phase.body.split('.')[0]}.`;
+  document.getElementById('week-sub').textContent = 'Cycle ' + state.cycle + ' · Week ' + state.week + ' · ' + phase.title + ': ' + phase.body.split('.')[0] + '.';
 
   const cb = document.getElementById('restrict-checkbox');
   cb.checked = state.restricted;
-  cb.onchange = () => { state.restricted = cb.checked; saveState(); render(); };
+  cb.onchange = function() { state.restricted = cb.checked; saveState(); render(); };
 }
 
 function renderDayTabs() {
   const dt = document.getElementById('day-tabs');
   dt.innerHTML = '';
   const dayset = state.restricted ? restrictedDays : days;
-  Object.keys(dayset).forEach(key => {
+  const keys = Object.keys(dayset);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
     const b = document.createElement('button');
     b.className = 'day-tab' + (state.day === key && state.view === 'day' ? ' active' : '');
-    b.innerHTML = dayset[key].label + (isDayComplete(key) ? '<span class="tab-check">✓</span>' : '');
-    b.onclick = () => { state.day = key; state.view = 'day'; saveState(); render(); };
+    b.innerHTML = dayset[key].label + (isDayComplete(key) ? '<span class="tab-check">&#10003;</span>' : '');
+    b.onclick = (function(key) {
+      return function() { state.day = key; state.view = 'day'; saveState(); render(); };
+    })(key);
     dt.appendChild(b);
-  });
+  }
+
   const cb = document.createElement('button');
   cb.className = 'day-tab' + (state.view === 'checkpoints' ? ' active' : '');
   cb.textContent = 'Checkpoints';
-  cb.onclick = () => { state.view = 'checkpoints'; saveState(); render(); };
+  cb.onclick = function() { state.view = 'checkpoints'; saveState(); render(); };
   dt.appendChild(cb);
 
   const pb = document.createElement('button');
   pb.className = 'day-tab' + (state.view === 'progress' ? ' active' : '');
   pb.textContent = 'Progress';
-  pb.onclick = () => { state.view = 'progress'; saveState(); render(); };
+  pb.onclick = function() { state.view = 'progress'; saveState(); render(); };
   dt.appendChild(pb);
 }
 
 function linkIcon() {
-  return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>`;
+  return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>';
 }
 
 function renderExerciseCard(day, ex, isWarmup, isFinisher) {
@@ -714,7 +735,7 @@ function renderExerciseCard(day, ex, isWarmup, isFinisher) {
   top.className = 'ex-top';
 
   const left = document.createElement('div');
-  left.innerHTML = `<p class="ex-name">${ex.name}</p><p class="ex-scheme">${ex.scheme}</p>`;
+  left.innerHTML = '<p class="ex-name">' + ex.name + '</p><p class="ex-scheme">' + ex.scheme + '</p>';
   top.appendChild(left);
 
   if (ex.link) {
@@ -734,72 +755,80 @@ function renderExerciseCard(day, ex, isWarmup, isFinisher) {
     card.appendChild(note);
   }
 
-  if (!isWarmup && !isFinisher) {
-    if (ex.noWeight) {
-      const entry = getEntry(day, ex.name, state.week) || {};
-      const row = document.createElement('div');
-      row.className = 'check-row';
-      row.innerHTML = `<input type="checkbox" ${entry.done ? 'checked' : ''} /> <label>Completed this week</label>`;
-      const input = row.querySelector('input');
-      input.addEventListener('change', () => {
-        setEntry(day, ex.name, state.week, 'done', input.checked);
-        setEntry(day, ex.name, state.week, 'date', todayStr());
-      });
-      card.appendChild(row);
-    } else {
-      const entry = getEntry(day, ex.name, state.week) || {};
-      const row = document.createElement('div');
-      row.className = 'weight-row';
-      row.innerHTML = `
-        <label>This week</label>
-        <input type="number" inputmode="decimal" placeholder="0" value="${entry.weight || ''}" />
-        <span class="unit">lbs</span>
-      `;
-      const input = row.querySelector('input');
-      input.addEventListener('change', () => {
-        if (input.value) {
-          setEntry(day, ex.name, state.week, 'weight', input.value);
-          setEntry(day, ex.name, state.week, 'date', todayStr());
-        } else {
-          clearEntry(day, ex.name, state.week);
-        }
-        render();
-      });
-      card.appendChild(row);
-
-      if (entry.date) {
-        const dateNote = document.createElement('div');
-        dateNote.className = 'prev-weight';
-        dateNote.style.marginTop = '4px';
-        dateNote.textContent = `Logged: ${entry.date}`;
-        card.appendChild(dateNote);
-      }
-
-      const prev = getPrevWeight(day, ex.name, state.week);
-      if (prev) {
-        const p = document.createElement('div');
-        p.className = 'prev-weight';
-        const cycleTag = prev.cycle ? `Cycle ${prev.cycle}, ` : '';
-        p.textContent = `${cycleTag}Week ${prev.week}${prev.date ? ' (' + prev.date + ')' : ''}: ${prev.val} lbs`;
-        card.appendChild(p);
-      }
-
-      const allPast = getAllEntries(day, ex.name).filter(e => !(e.week === state.week && e.cycle === state.cycle));
-      if (allPast.length > 1) {
-        const histWrap = document.createElement('div');
-        histWrap.style.cssText = 'margin-top:6px;padding-top:6px;border-top:1px dashed #eee;';
-        allPast.slice().reverse().forEach(e => {
-          const line = document.createElement('div');
-          line.className = 'prev-weight';
-          const cTag = state.cycle > 1 ? `C${e.cycle} ` : '';
-          line.textContent = `${cTag}Week ${e.week} (${e.date || 'no date'}): ${e.weight} lbs`;
-          histWrap.appendChild(line);
-        });
-        card.appendChild(histWrap);
-      }
-    }
+  if (isWarmup || isFinisher) {
+    return card;
   }
 
+  if (ex.noWeight) {
+    const entry = getEntry(day, ex.name, state.week) || {};
+    const row = document.createElement('div');
+    row.className = 'check-row';
+    row.innerHTML = '<input type="checkbox" ' + (entry.done ? 'checked' : '') + ' /> <label>Completed this week</label>';
+    const input = row.querySelector('input');
+    input.addEventListener('change', function() {
+      if (input.checked) {
+        setEntry(day, ex.name, state.week, 'done', true);
+        setEntry(day, ex.name, state.week, 'date', todayStr());
+      } else {
+        clearEntry(day, ex.name, state.week);
+      }
+      render();
+    });
+    card.appendChild(row);
+    if (entry.done) card.classList.add('ex-complete');
+    return card;
+  }
+
+  const entry = getEntry(day, ex.name, state.week) || {};
+  const row = document.createElement('div');
+  row.className = 'weight-row';
+  row.innerHTML = '<label>This week</label><input type="number" inputmode="decimal" placeholder="0" value="' + (entry.weight || '') + '" /><span class="unit">lbs</span>';
+  const input = row.querySelector('input');
+  input.addEventListener('change', function() {
+    if (input.value) {
+      setEntry(day, ex.name, state.week, 'weight', input.value);
+      setEntry(day, ex.name, state.week, 'date', todayStr());
+    } else {
+      clearEntry(day, ex.name, state.week);
+    }
+    render();
+  });
+  card.appendChild(row);
+
+  if (entry.date) {
+    const dateNote = document.createElement('div');
+    dateNote.className = 'prev-weight';
+    dateNote.style.marginTop = '4px';
+    dateNote.textContent = 'Logged: ' + entry.date;
+    card.appendChild(dateNote);
+  }
+
+  const prev = getPrevWeight(day, ex.name, state.week);
+  if (prev) {
+    const p = document.createElement('div');
+    p.className = 'prev-weight';
+    const cycleTag = prev.cycle ? ('Cycle ' + prev.cycle + ', ') : '';
+    p.textContent = cycleTag + 'Week ' + prev.week + (prev.date ? (' (' + prev.date + ')') : '') + ': ' + prev.val + ' lbs';
+    card.appendChild(p);
+  }
+
+  const allPast = getAllEntries(day, ex.name).filter(function(e) {
+    return !(e.week === state.week && e.cycle === state.cycle);
+  });
+  if (allPast.length > 1) {
+    const histWrap = document.createElement('div');
+    histWrap.style.cssText = 'margin-top:6px;padding-top:6px;border-top:1px dashed #eee;';
+    allPast.slice().reverse().forEach(function(e) {
+      const line = document.createElement('div');
+      line.className = 'prev-weight';
+      const cTag = state.cycle > 1 ? ('C' + e.cycle + ' ') : '';
+      line.textContent = cTag + 'Week ' + e.week + ' (' + (e.date || 'no date') + '): ' + e.weight + ' lbs';
+      histWrap.appendChild(line);
+    });
+    card.appendChild(histWrap);
+  }
+
+  if (entry.weight) card.classList.add('ex-complete');
   return card;
 }
 
@@ -807,20 +836,25 @@ function renderTrackedBlock(dayKey, blockKey, label) {
   const wrap = document.createElement('div');
   wrap.className = 'simple-item';
   const mobHtml = blockKey === '__mobility__'
-    ? mobility.items.map(i => `<div style="padding:2px 0">${i}</div>`).join('')
+    ? mobility.items.map(function(i) { return '<div style="padding:2px 0">' + i + '</div>'; }).join('')
     : '';
   const entry = getEntry(dayKey, blockKey, state.week) || {};
   wrap.innerHTML = mobHtml;
   const checkRow = document.createElement('div');
   checkRow.className = 'check-row';
-  checkRow.innerHTML = `<input type="checkbox" ${entry.done ? 'checked' : ''} /> <label>${label}</label>`;
+  checkRow.innerHTML = '<input type="checkbox" ' + (entry.done ? 'checked' : '') + ' /> <label>' + label + '</label>';
   const input = checkRow.querySelector('input');
-  input.addEventListener('change', () => {
-    setEntry(dayKey, blockKey, state.week, 'done', input.checked);
-    setEntry(dayKey, blockKey, state.week, 'date', todayStr());
+  input.addEventListener('change', function() {
+    if (input.checked) {
+      setEntry(dayKey, blockKey, state.week, 'done', true);
+      setEntry(dayKey, blockKey, state.week, 'date', todayStr());
+    } else {
+      clearEntry(dayKey, blockKey, state.week);
+    }
     render();
   });
   wrap.appendChild(checkRow);
+  if (entry.done) wrap.classList.add('ex-complete');
   return wrap;
 }
 
@@ -841,7 +875,7 @@ function renderContent() {
   if (day.rest) {
     const banner = document.createElement('div');
     banner.className = 'rest-note';
-    banner.innerHTML = day.items.map(i => `<div style="padding:4px 0">${i}</div>`).join('');
+    banner.innerHTML = day.items.map(function(i) { return '<div style="padding:4px 0">' + i + '</div>'; }).join('');
     content.appendChild(banner);
     return;
   }
@@ -849,7 +883,7 @@ function renderContent() {
   if (isDayComplete(state.day)) {
     const doneBanner = document.createElement('div');
     doneBanner.className = 'day-complete-banner';
-    doneBanner.textContent = '✓ Day complete — nice work. Your entries are still shown below.';
+    doneBanner.textContent = 'Day complete — nice work. Your entries are still shown below.';
     content.appendChild(doneBanner);
     content.classList.add('day-complete');
   }
@@ -858,7 +892,7 @@ function renderContent() {
     const banner = document.createElement('div');
     banner.className = 'banner';
     const phase = progressionText[getPhase(state.week)];
-    banner.innerHTML = `<strong>${phase.title}:</strong> ${phase.body}`;
+    banner.innerHTML = '<strong>' + phase.title + ':</strong> ' + phase.body;
     content.appendChild(banner);
   }
 
@@ -879,7 +913,7 @@ function renderContent() {
   exLabel.className = 'section-label';
   exLabel.textContent = 'Exercises';
   content.appendChild(exLabel);
-  day.exercises.forEach(ex => {
+  day.exercises.forEach(function(ex) {
     content.appendChild(renderExerciseCard(state.day, ex, false, false));
   });
 
@@ -897,14 +931,64 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
   const row = document.createElement('div');
   row.className = 'cp-row';
   const val = (state.checkpoints[cpKey] && state.checkpoints[cpKey][fieldKey]) || '';
-  row.innerHTML = `<label>${label}</label><input type="text" inputmode="decimal" placeholder="${placeholder}" value="${val}" />`;
+  row.innerHTML = '<label>' + label + '</label><input type="text" inputmode="decimal" placeholder="' + placeholder + '" value="' + val + '" />';
   const input = row.querySelector('input');
-  input.addEventListener('change', () => {
+  input.addEventListener('change', function() {
     if (!state.checkpoints[cpKey]) state.checkpoints[cpKey] = {};
     state.checkpoints[cpKey][fieldKey] = input.value;
     saveState();
   });
   return row;
+}
+
+function buildLineChart(title, points, color) {
+  const wrap = document.createElement('div');
+  wrap.className = 'progress-ex-card';
+  if (title) {
+    const h = document.createElement('h4');
+    h.textContent = title;
+    wrap.appendChild(h);
+  }
+
+  const valid = points.filter(function(p) { return p.val !== null && !isNaN(p.val); });
+  if (valid.length < 2) {
+    const nd = document.createElement('div');
+    nd.className = 'no-data';
+    nd.textContent = valid.length === 0 ? 'No data entered yet' : 'Need at least 2 data points to graph';
+    wrap.appendChild(nd);
+    return wrap;
+  }
+
+  const W = 320, H = 140, pad = 30;
+  const vals = valid.map(function(p) { return p.val; });
+  const min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+  const range = max - min || 1;
+  const stepX = (W - pad * 2) / (points.length - 1);
+
+  let pathD = '';
+  let dots = '';
+  let labels = '';
+  points.forEach(function(p, i) {
+    if (p.val === null || isNaN(p.val)) return;
+    const x = pad + i * stepX;
+    const y = H - pad - ((p.val - min) / range) * (H - pad * 2);
+    pathD += (pathD ? 'L' : 'M') + x + ',' + y + ' ';
+    dots += '<circle cx="' + x + '" cy="' + y + '" r="4" fill="' + color + '"/>';
+    labels += '<text x="' + x + '" y="' + (H - 6) + '" font-size="10" fill="#999" text-anchor="middle">' + p.label + '</text>';
+    labels += '<text x="' + x + '" y="' + (y - 10) + '" font-size="11" fill="#333" text-anchor="middle" font-weight="600">' + p.val + '</text>';
+  });
+
+  const svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '"><path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>' + dots + labels + '</svg>';
+  wrap.innerHTML += svg;
+
+  const first = valid[0].val, last = valid[valid.length - 1].val;
+  const diff = (last - first).toFixed(1);
+  const stats = document.createElement('div');
+  stats.className = 'chart-stats';
+  stats.innerHTML = '<div>Start: <strong>' + first + '</strong></div><div>Latest: <strong>' + last + '</strong></div><div>Change: <strong>' + (diff > 0 ? '+' : '') + diff + '</strong></div>';
+  wrap.appendChild(stats);
+
+  return wrap;
 }
 
 function renderCheckpoints() {
@@ -913,7 +997,7 @@ function renderCheckpoints() {
 
   const intro = document.createElement('div');
   intro.className = 'banner';
-  intro.innerHTML = `<strong>Monthly checkpoints — Cycle ${state.cycle}:</strong> log your numbers at the start, week 4, and week 8 to see real progress. Take front, side, and back photos on your phone at each checkpoint and keep them in an album named for the date.`;
+  intro.innerHTML = '<strong>Monthly checkpoints — Cycle ' + state.cycle + ':</strong> log your numbers at the start, week 4, and week 8 to see real progress. Take front, side, and back photos on your phone at each checkpoint and keep them in an album named for the date.';
   cc.appendChild(intro);
 
   const checkpointDefs = [
@@ -922,7 +1006,7 @@ function renderCheckpoints() {
     { key: 'week8', title: 'Week 8' }
   ];
 
-  checkpointDefs.forEach(def => {
+  checkpointDefs.forEach(function(def) {
     const card = document.createElement('div');
     card.className = 'checkpoint-card';
     const h = document.createElement('h3');
@@ -933,7 +1017,7 @@ function renderCheckpoints() {
 
     const photoRow = document.createElement('div');
     photoRow.style.cssText = 'font-size:12px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #f0efe9;';
-    photoRow.textContent = 'Photos: front, side, back (store in your phone\'s photo album)';
+    photoRow.textContent = 'Photos: front, side, back (store in your phone photo album)';
     card.appendChild(photoRow);
 
     cc.appendChild(card);
@@ -945,76 +1029,25 @@ function renderCheckpoints() {
   cc.appendChild(measLabel);
 
   let allPoints = [];
-  (state.archivedCheckpoints || []).forEach(arch => {
-    checkpointDefs.forEach(def => {
+  (state.archivedCheckpoints || []).forEach(function(arch) {
+    checkpointDefs.forEach(function(def) {
       allPoints.push({
-        label: `C${arch.cycle} ${def.title}`,
-        weight: parseFloat(arch[def.key]?.weight) || null,
-        waist: parseFloat(arch[def.key]?.waist) || null
+        label: 'C' + arch.cycle + ' ' + def.title,
+        weight: parseFloat(arch[def.key] && arch[def.key].weight) || null,
+        waist: parseFloat(arch[def.key] && arch[def.key].waist) || null
       });
     });
   });
-  checkpointDefs.forEach(def => {
+  checkpointDefs.forEach(function(def) {
     allPoints.push({
-      label: (state.cycle > 1 ? `C${state.cycle} ` : '') + def.title,
-      weight: parseFloat(state.checkpoints[def.key]?.weight) || null,
-      waist: parseFloat(state.checkpoints[def.key]?.waist) || null
+      label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title,
+      weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null,
+      waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null
     });
   });
 
-  cc.appendChild(buildLineChart('Weight (lbs)', allPoints.map(p => ({ label: p.label, val: p.weight })), '#e8722c'));
-  cc.appendChild(buildLineChart('Waist (in)', allPoints.map(p => ({ label: p.label, val: p.waist })), '#3a7ae8'));
-}
-
-function buildLineChart(title, points, color) {
-  const wrap = document.createElement('div');
-  wrap.className = 'progress-ex-card';
-  const h = document.createElement('h4');
-  h.textContent = title;
-  wrap.appendChild(h);
-
-  const valid = points.filter(p => p.val !== null && !isNaN(p.val));
-  if (valid.length < 2) {
-    const nd = document.createElement('div');
-    nd.className = 'no-data';
-    nd.textContent = valid.length === 0 ? 'No data entered yet' : 'Need at least 2 data points to graph';
-    wrap.appendChild(nd);
-    return wrap;
-  }
-
-  const W = 320, H = 140, pad = 30;
-  const vals = valid.map(p => p.val);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const range = max - min || 1;
-  const stepX = (W - pad * 2) / (points.length - 1);
-
-  let pathD = '';
-  let dots = '';
-  let labels = '';
-  points.forEach((p, i) => {
-    const x = pad + i * stepX;
-    if (p.val === null || isNaN(p.val)) return;
-    const y = H - pad - ((p.val - min) / range) * (H - pad * 2);
-    pathD += (pathD ? 'L' : 'M') + x + ',' + y + ' ';
-    dots += `<circle cx="${x}" cy="${y}" r="4" fill="${color}"/>`;
-    labels += `<text x="${x}" y="${H - 6}" font-size="10" fill="#999" text-anchor="middle">${p.label}</text>`;
-    labels += `<text x="${x}" y="${y - 10}" font-size="11" fill="#333" text-anchor="middle" font-weight="600">${p.val}</text>`;
-  });
-
-  const svg = `<svg class="chart" viewBox="0 0 ${W} ${H}">
-    <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2.5"/>
-    ${dots}${labels}
-  </svg>`;
-  wrap.innerHTML += svg;
-
-  const first = valid[0].val, last = valid[valid.length - 1].val;
-  const diff = (last - first).toFixed(1);
-  const stats = document.createElement('div');
-  stats.className = 'chart-stats';
-  stats.innerHTML = `<div>Start: <strong>${first}</strong></div><div>Latest: <strong>${last}</strong></div><div>Change: <strong>${diff > 0 ? '+' : ''}${diff}</strong></div>`;
-  wrap.appendChild(stats);
-
-  return wrap;
+  cc.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight }; }), '#e8722c'));
+  cc.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist }; }), '#3a7ae8'));
 }
 
 function renderProgress() {
@@ -1023,22 +1056,28 @@ function renderProgress() {
 
   const intro = document.createElement('div');
   intro.className = 'banner';
-  intro.innerHTML = `<strong>Exercise progress — Cycle ${state.cycle}:</strong> every weighted exercise you've logged, tracked across weeks and past cycles so you can see real improvement.`;
+  intro.innerHTML = '<strong>Exercise progress — Cycle ' + state.cycle + ':</strong> every weighted exercise logged so far, tracked across weeks and past cycles so you can see real improvement.';
   pc.appendChild(intro);
 
   const restartWrap = document.createElement('div');
   restartWrap.className = 'card';
-  restartWrap.innerHTML = `
-    <p class="ex-name" style="margin-bottom:6px;">Finished this 8-week cycle?</p>
-    <p class="ex-scheme" style="margin-bottom:10px;">Starting a new cycle resets the week picker to Week 1 with clean inputs. All your past weights, dates, and checkpoints stay saved and keep showing on these graphs.</p>
-  `;
+  restartWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Finished this 8-week cycle?</p><p class="ex-scheme" style="margin-bottom:10px;">Starting a new cycle resets the week picker to Week 1 with clean inputs. All your past weights, dates, and checkpoints stay saved and keep showing on these graphs.</p>';
   const restartBtn = document.createElement('button');
-  restartBtn.textContent = `Start Cycle ${state.cycle + 1}`;
+  restartBtn.textContent = 'Start Cycle ' + (state.cycle + 1);
   restartBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;';
-  restartBtn.onclick = () => {
-    if (confirm(`Start Cycle ${state.cycle + 1}? Your Cycle ${state.cycle} data will stay saved for progress tracking, and the week picker will reset to Week 1.`)) {
-      if (state.checkpoints && (state.checkpoints.start?.weight || state.checkpoints.week4?.weight || state.checkpoints.week8?.weight)) {
-        state.archivedCheckpoints.push({ cycle: state.cycle, ...state.checkpoints });
+  restartBtn.onclick = function() {
+    if (confirm('Start Cycle ' + (state.cycle + 1) + '? Your Cycle ' + state.cycle + ' data will stay saved for progress tracking, and the week picker will reset to Week 1.')) {
+      const hasData = state.checkpoints && (
+        (state.checkpoints.start && state.checkpoints.start.weight) ||
+        (state.checkpoints.week4 && state.checkpoints.week4.weight) ||
+        (state.checkpoints.week8 && state.checkpoints.week8.weight)
+      );
+      if (hasData) {
+        const archived = { cycle: state.cycle };
+        archived.start = state.checkpoints.start;
+        archived.week4 = state.checkpoints.week4;
+        archived.week8 = state.checkpoints.week8;
+        state.archivedCheckpoints.push(archived);
       }
       state.checkpoints = { start: {}, week4: {}, week8: {} };
       state.cycle += 1;
@@ -1052,41 +1091,46 @@ function renderProgress() {
   pc.appendChild(restartWrap);
 
   const dayset = state.restricted ? restrictedDays : days;
-  const seen = new Set();
+  const seen = {};
+  const keys = Object.keys(dayset);
 
-  Object.keys(dayset).forEach(dayKey => {
+  for (let k = 0; k < keys.length; k++) {
+    const dayKey = keys[k];
     const day = dayset[dayKey];
-    if (day.rest) return;
-    day.exercises.forEach(ex => {
-      if (ex.noWeight) return;
+    if (day.rest) continue;
+    for (let x = 0; x < day.exercises.length; x++) {
+      const ex = day.exercises[x];
+      if (ex.noWeight) continue;
       const uniqueKey = dayKey + '::' + ex.name;
-      if (seen.has(uniqueKey)) return;
-      seen.add(uniqueKey);
+      if (seen[uniqueKey]) continue;
+      seen[uniqueKey] = true;
 
       const entries = getAllEntries(dayKey, ex.name);
       const card = document.createElement('div');
       card.className = 'progress-ex-card';
       const h = document.createElement('h4');
-      h.textContent = `${ex.name} — ${day.label}`;
+      h.textContent = ex.name + ' — ' + day.label;
       card.appendChild(h);
 
       if (entries.length < 2) {
         const nd = document.createElement('div');
         nd.className = 'no-data';
-        nd.textContent = entries.length === 0 ? 'No weights logged yet' : `1 entry logged (Week ${entries[0].week}: ${entries[0].weight} lbs) — need 2+ to graph`;
+        nd.textContent = entries.length === 0 ? 'No weights logged yet' : ('1 entry logged (Week ' + entries[0].week + ': ' + entries[0].weight + ' lbs) — need 2+ to graph');
         card.appendChild(nd);
         pc.appendChild(card);
-        return;
+        continue;
       }
 
-      const points = entries.map(e => ({ label: (state.cycle > 1 ? 'C' + e.cycle + 'W' + e.week : 'Wk' + e.week), val: e.weight }));
+      const points = entries.map(function(e) {
+        return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)), val: e.weight };
+      });
       const chartCard = buildLineChart('', points, '#e8722c');
       card.innerHTML += chartCard.innerHTML;
       pc.appendChild(card);
-    });
-  });
+    }
+  }
 
-  if (seen.size === 0) {
+  if (Object.keys(seen).length === 0) {
     const nd = document.createElement('div');
     nd.className = 'rest-note';
     nd.textContent = 'No weighted exercises in the current mode.';
