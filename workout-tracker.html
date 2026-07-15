@@ -379,7 +379,7 @@ const days = {
     exercises: [
       { name: 'Smith machine Romanian deadlift', scheme: '4 x 10 - 3-sec lowering', link: YT('smith machine romanian deadlift tutorial') },
       { name: 'Leg press', scheme: '3 x 12', link: YT('leg press machine proper form') },
-      { name: 'Walking lunges', scheme: '2 x 12 each leg', link: YT('walking lunges proper form') },
+      { name: 'Walking lunges', scheme: '2 x 12 each leg', link: YT('walking lunges proper form'), noWeight: true },
       { name: 'Seated leg curl', scheme: '3 x 12', link: YT('seated leg curl machine form') },
       { name: 'Calf raise machine', scheme: '3 x 15', link: YT('calf raise machine proper form') },
       { name: 'Plank', scheme: '3 x 45 sec', link: YT('plank proper form'), noWeight: true }
@@ -667,7 +667,12 @@ function getAllEntries(day, exName) {
 function isDayComplete(dayKey) {
   const dayset = state.restricted ? restrictedDays : days;
   const day = dayset[dayKey];
-  if (!day || day.rest) return false;
+  if (!day) return false;
+
+  if (day.rest) {
+    const restEntry = getEntry(dayKey, '__rest_day__', state.week);
+    return !!(restEntry && restEntry.done);
+  }
 
   const mobEntry = getEntry(dayKey, '__mobility__', state.week);
   if (!mobEntry || !mobEntry.done) return false;
@@ -701,7 +706,6 @@ function isWeekComplete(week) {
   const keys = Object.keys(dayset);
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
-    if (dayset[key].rest) continue;
     if (!isDayComplete(key)) { allDone = false; break; }
   }
   state.week = savedWeek;
@@ -917,6 +921,25 @@ function renderContent() {
     banner.className = 'rest-note';
     banner.innerHTML = day.items.map(function(i) { return '<div style="padding:4px 0">' + i + '</div>'; }).join('');
     content.appendChild(banner);
+
+    const restEntry = getEntry(state.day, '__rest_day__', state.week) || {};
+    const restCard = document.createElement('div');
+    restCard.className = 'simple-item' + (restEntry.done ? ' ex-complete' : '');
+    const checkRow = document.createElement('div');
+    checkRow.className = 'check-row';
+    checkRow.innerHTML = '<input type="checkbox" ' + (restEntry.done ? 'checked' : '') + ' /> <label>Completed this day</label>';
+    const input = checkRow.querySelector('input');
+    input.addEventListener('change', function() {
+      if (input.checked) {
+        setEntry(state.day, '__rest_day__', state.week, 'done', true);
+        setEntry(state.day, '__rest_day__', state.week, 'date', todayStr());
+      } else {
+        clearEntry(state.day, '__rest_day__', state.week);
+      }
+      render();
+    });
+    restCard.appendChild(checkRow);
+    content.appendChild(restCard);
     return;
   }
 
