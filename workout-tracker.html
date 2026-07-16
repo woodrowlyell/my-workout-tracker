@@ -1215,6 +1215,23 @@ function renderDebug() {
   intro.innerHTML = '<strong>Storage check:</strong> this shows exactly what is saved on this phone right now.';
   dc.appendChild(intro);
 
+  const allKeysCard = document.createElement('div');
+  allKeysCard.className = 'progress-ex-card';
+  let allKeysHtml = '<h4>All localStorage keys on this site</h4>';
+  if (localStorage.length === 0) {
+    allKeysHtml += '<p style="font-size:13px;">No keys found at all.</p>';
+  } else {
+    allKeysHtml += '<p style="font-size:13px;">Found ' + localStorage.length + ' key(s):</p>';
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      const v = localStorage.getItem(k);
+      const size = v ? v.length : 0;
+      allKeysHtml += '<div style="font-size:12px;padding:4px 0;border-top:1px solid #f0efe9;"><strong>' + k + '</strong> (' + size + ' chars)</div>';
+    }
+  }
+  allKeysCard.innerHTML = allKeysHtml;
+  dc.appendChild(allKeysCard);
+
   const oldRaw = localStorage.getItem('workout-state');
   const newRaw = localStorage.getItem('workout-state-v2');
 
