@@ -136,6 +136,30 @@ Object.keys(exerciseLibrary).forEach(function(id) {
   substituteGroups[m].push(id);
 });
 
+const muscleToTag = {
+  chest: 'Push', shoulders: 'Push', triceps: 'Push',
+  back: 'Pull', biceps: 'Pull',
+  legs_posterior: 'Legs', legs_general: 'Legs', legs_quad: 'Legs', calves: 'Legs',
+  core: 'Core', cardio: 'Cardio'
+};
+
+function deriveDayTag(exerciseIds) {
+  if (!exerciseIds || exerciseIds.length === 0) return '';
+  const tagCounts = {};
+  exerciseIds.forEach(function(id) {
+    const muscle = exerciseLibrary[id].muscle;
+    const tag = muscleToTag[muscle] || 'Mixed';
+    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+  });
+  const sorted = Object.keys(tagCounts).map(function(k) { return [k, tagCounts[k]]; }).sort(function(a, b) { return b[1] - a[1]; });
+  if (sorted.length === 0) return '';
+  if (sorted.length === 1) return sorted[0][0];
+  if (sorted[0][1] === sorted[1][1]) {
+    return sorted[0][0] + '/' + sorted[1][0];
+  }
+  return sorted[0][0];
+}
+
 const mobility = {
   items: [
     '10 bodyweight squats',
@@ -430,7 +454,10 @@ function renderDayTabs(container) {
   keys.forEach(function(key) {
     const b = document.createElement('button');
     b.className = 'day-tab' + (state.day === key && state.screen === 'day' ? ' active' : '');
-    b.innerHTML = state.activePlan[key].label + (isDayComplete(key, state.week) ? '<span class="tab-check">&#10003;</span>' : '');
+    const dayInfo = state.activePlan[key];
+    const tag = dayInfo.rest ? 'Rest' : deriveDayTag(dayInfo.exerciseIds);
+    const displayLabel = dayInfo.label + (tag ? ' - ' + tag : '');
+    b.innerHTML = displayLabel + (isDayComplete(key, state.week) ? '<span class="tab-check">&#10003;</span>' : '');
     b.onclick = function() { state.day = key; state.screen = 'day'; saveState(); render(); };
     dt.appendChild(b);
   });
