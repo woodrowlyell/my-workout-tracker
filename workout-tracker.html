@@ -197,6 +197,7 @@ let state = {
   programLength: null,
   week: 1,
   cycle: 1,
+  viewingCycle: 1,
   day: 'mon',
   weights: {},
   checkpoints: { start: {}, week4: {}, week8: {} },
@@ -358,18 +359,18 @@ function finalizeProgram(goalKey, subgoalKey) {
 }
 
 function getEntry(dayKey, exId, week, cycle) {
-  const c = cycle !== undefined ? cycle : state.cycle;
+  const c = cycle !== undefined ? cycle : state.viewingCycle;
   const k = dayKey + '::' + exId + '::c' + c + '::w' + week;
   return state.weights[k] || null;
 }
 function setEntry(dayKey, exId, week, field, val) {
-  const k = dayKey + '::' + exId + '::c' + state.cycle + '::w' + week;
+  const k = dayKey + '::' + exId + '::c' + state.viewingCycle + '::w' + week;
   if (!state.weights[k]) state.weights[k] = {};
   state.weights[k][field] = val;
   saveState();
 }
 function clearEntry(dayKey, exId, week) {
-  const k = dayKey + '::' + exId + '::c' + state.cycle + '::w' + week;
+  const k = dayKey + '::' + exId + '::c' + state.viewingCycle + '::w' + week;
   delete state.weights[k];
   saveState();
 }
@@ -938,6 +939,7 @@ function renderProgressScreen(container) {
       state.goalHistory.push({ cycle: state.cycle, goal: state.goal, length: state.programLength });
       state.checkpoints = { start: {}, week4: {}, week8: {} };
       state.cycle += 1;
+      state.viewingCycle = state.cycle;
       state.week = 1;
       state.screen = 'select_goal';
       saveState();
@@ -1017,6 +1019,34 @@ function renderDebugScreen(container) {
   intro.className = 'banner';
   intro.innerHTML = '<strong>Storage check:</strong> everything saved on this phone right now.';
   content.appendChild(intro);
+
+  const summaryCard = document.createElement('div');
+  summaryCard.className = 'progress-ex-card';
+  let summaryHtml = '<h4>Current app state</h4>';
+  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Current cycle: <strong>' + state.cycle + '</strong></div>';
+  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Current week: <strong>' + state.week + '</strong></div>';
+  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Goal: <strong>' + (state.goal || 'none set') + '</strong></div>';
+  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Program length: <strong>' + (state.programLength || 'none') + '</strong></div>';
+  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Total weight entries stored: <strong>' + Object.keys(state.weights).length + '</strong></div>';
+  summaryCard.innerHTml = summaryHtml;
+  summaryCard.innerHTML = summaryHtml;
+  content.appendChild(summaryCard);
+
+  const entriesCard = document.createElement('div');
+  entriesCard.className = 'progress-ex-card';
+  let entriesHtml = '<h4>All logged weight entries</h4>';
+  const keys = Object.keys(state.weights);
+  if (keys.length === 0) {
+    entriesHtml += '<p style="font-size:13px;">No entries found.</p>';
+  } else {
+    keys.sort().forEach(function(k) {
+      const v = state.weights[k];
+      entriesHtml += '<div style="font-size:11px;padding:3px 0;border-top:1px solid #f0efe9;">' + k + ' &rarr; ' + JSON.stringify(v) + '</div>';
+    });
+  }
+  entriesCard.innerHTML = entriesHtml;
+  content.appendChild(entriesCard);
+
   const allKeysCard = document.createElement('div');
   allKeysCard.className = 'progress-ex-card';
   let html = '<h4>All localStorage keys on this site</h4>';
@@ -1067,8 +1097,27 @@ function renderDayTabs(container) {
 function renderWeekPicker(container) {
   const header = document.createElement('div');
   header.className = 'header';
-  header.innerHTML = '<h1>' + goalTemplates[state.goal].label + '</h1><div class="sub" id="week-sub"></div><div class="week-picker" id="week-picker"></div>';
+  const cycleOptions = [];
+  for (let c = 1; c <= state.cycle; c++) cycleOptions.push(c);
+  let cycleSelectHtml = '';
+  if (cycleOptions.length > 1) {
+    cycleSelectHtml = '<select id="cycle-select" style="margin-top:8px;padding:6px 10px;border-radius:8px;border:1px solid #444;background:#2a2a27;color:#d5d4cd;font-size:13px;">' +
+      cycleOptions.map(function(c) { return '<option value="' + c + '"' + (c === state.viewingCycle ? ' selected' : '') + '>Cycle ' + c + (c === state.cycle ? ' (current)' : '') + '</option>'; }).join('') +
+      '</select>';
+  }
+  header.innerHTML = '<h1>' + goalTemplates[state.goal].label + '</h1><div class="sub" id="week-sub"></div>' + cycleSelectHtml + '<div class="week-picker" id="week-picker"></div>';
   container.appendChild(header);
+
+  if (cycleOptions.length > 1) {
+    const sel = header.querySelector('#cycle-select');
+    sel.onchange = function() {
+      state.viewingCycle = parseInt(sel.value, 10);
+      state.week = 1;
+      saveState();
+      render();
+    };
+  }
+
   const wp = header.querySelector('#week-picker');
   const totalWeeks = state.programLength || 8;
   for (let i = 1; i <= totalWeeks; i++) {
@@ -1078,7 +1127,21 @@ function renderWeekPicker(container) {
     b.onclick = (function(i) { return function() { state.week = i; saveState(); render(); }; })(i);
     wp.appendChild(b);
   }
-  header.querySelector('#week-sub').textContent = 'Cycle ' + state.cycle + ' - Week ' + state.week + ' of ' + totalWeeks;
+  const viewingLabel = state.viewingCycle !== state.cycle ? ' - viewing past cycle' : '';
+  header.querySelector('#week-sub').textContent = 'Cycle ' + state.viewingCycle + ' - Week ' + state.week + ' of ' + totalWeeks + viewingLabel;
+
+  if (state.viewingCycle !== state.cycle) {
+    const backBtn = document.createElement('button');
+    backBtn.textContent = 'Return to current cycle';
+    backBtn.style.cssText = 'margin-top:8px;padding:8px 12px;background:#e8722c;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;';
+    backBtn.onclick = function() {
+      state.viewingCycle = state.cycle;
+      state.week = 1;
+      saveState();
+      render();
+    };
+    header.appendChild(backBtn);
+  }
 }
 
 function render() {
