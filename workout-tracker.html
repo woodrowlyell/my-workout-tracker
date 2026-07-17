@@ -174,46 +174,54 @@ const goalTemplates = {
   get_stronger: {
     label: 'Get Stronger',
     desc: 'Push/Pull/Legs split focused on building strength across major lifts',
-    days: {
-      mon: { label: 'Mon Push', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'shoulder_press_machine', 'cable_lateral_raise', 'triceps_pushdown'], finisherId: 'incline_walk' },
-      tue: { label: 'Tue Legs', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'walking_lunge', 'seated_leg_curl', 'calf_raise_machine', 'plank'], finisherId: null },
-      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: hip flexors', 'Stretch: chest', 'Stretch: upper back'] },
-      thu: { label: 'Thu Pull', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'chest_supported_row', 'seated_cable_row', 'face_pull', 'hammer_curl', 'cable_curl'], finisherId: 'incline_walk' },
-      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'incline_db_press', 'lat_pulldown', 'smith_rdl', 'cable_woodchop', 'farmer_carry'], finisherId: 'incline_walk' },
-      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min', 'Goal: 10,000-12,000 steps'] },
-      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
-    }
+    subgoals: ['total_body', 'arms', 'legs', 'core', 'sustain'],
+    subgoalLabels: { total_body: 'Total Body', arms: 'Arms', legs: 'Legs', core: 'Core', sustain: 'Sustain What You Have' }
   },
   strengthen_core: {
     label: 'Strengthen Core',
     desc: 'Full-body training with extra core volume each session',
-    days: {
-      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'chest_press_machine', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
-      tue: { label: 'Tue Full Body', warmupId: 'bike', exerciseIds: ['lat_pulldown', 'seated_leg_curl', 'ab_crunch_machine', 'farmer_carry'], finisherId: null },
-      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hip flexors', 'Stretch: chest'] },
-      thu: { label: 'Thu Full Body', warmupId: 'treadmill', exerciseIds: ['leg_press', 'shoulder_press_machine', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
-      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'chest_supported_row', 'ab_crunch_machine', 'farmer_carry'], finisherId: 'incline_walk' },
-      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min', 'Goal: 10,000-12,000 steps'] },
-      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
-    }
+    subgoals: null
   },
   general_fitness: {
     label: 'General Fitness',
-    desc: 'Well-rounded full body training, moderate volume, sustainable pace',
+    desc: 'Well-rounded, sustainable training',
+    subgoals: ['well_rounded', 'moderate_volume', 'sustain'],
+    subgoalLabels: { well_rounded: 'Well-Rounded Full Body', moderate_volume: 'Moderate Volume', sustain: 'Sustain What You Have' }
+  }
+};
+
+const programLibrary = {
+  '8_get_stronger_total_body': {
+    stepsGoal: null,
     days: {
-      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat', 'plank'], finisherId: 'incline_walk' },
-      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'] },
-      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'shoulder_press_machine', 'ab_crunch_machine'], finisherId: null },
-      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'] },
-      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'lat_pulldown', 'plank'], finisherId: 'incline_walk' },
-      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike', 'Goal: 8,000-10,000 steps'] },
-      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+      mon: { label: 'Mon Push', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'shoulder_press_machine', 'cable_lateral_raise', 'triceps_pushdown'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Legs', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'walking_lunge', 'seated_leg_curl', 'calf_raise_machine', 'plank'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: hip flexors', 'Stretch: chest', 'Stretch: upper back'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Pull', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'chest_supported_row', 'seated_cable_row', 'face_pull', 'hammer_curl', 'cable_curl'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'incline_db_press', 'lat_pulldown', 'smith_rdl', 'cable_woodchop', 'farmer_carry'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
     }
   }
 };
 
+function buildPlanKey(length, goal, subgoal) {
+  let key = length + '_' + goal;
+  if (subgoal) key += '_' + subgoal;
+  return key;
+}
+function isProgramAvailable(length, goal, subgoal) {
+  return !!programLibrary[buildPlanKey(length, goal, subgoal)];
+}
+function getProgram(length, goal, subgoal) {
+  return programLibrary[buildPlanKey(length, goal, subgoal)];
+}
+
 let state = {
-  screen: 'day',
+  screen: 'select_length',
+  selectedLength: null,
+  selectedGoal: null,
+  selectedSubgoal: null,
   goal: null,
   activePlan: null,
   week: 1,
@@ -382,7 +390,12 @@ function isDayComplete(dayKey, week) {
   if (!day) return false;
   if (day.rest) {
     const e = getEntry(dayKey, '__rest_' + dayKey + '__', week);
-    return !!(e && e.done);
+    const restDone = !!(e && e.done);
+    if (day.stepsGoal) {
+      const stepsE = getEntry(dayKey, '__steps__', week);
+      return restDone && !!(stepsE && stepsE.weight);
+    }
+    return restDone;
   }
   const mob = getEntry(dayKey, '__mobility_' + dayKey + '__', week);
   if (!mob || !mob.done) return false;
@@ -482,21 +495,67 @@ function openSwapModal(dayKey, exIndex) {
   document.body.appendChild(overlay);
 }
 
+function renderLengthSelect() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  wrap.innerHTML = '<h2>Choose a program length</h2><p>You can start a new cycle with a different length or goal anytime after finishing.</p>';
+  [4, 8, 12].forEach(function(len) {
+    const btn = document.createElement('button');
+    btn.className = 'goal-btn';
+    btn.innerHTML = len + ' Weeks';
+    btn.onclick = function() { chooseLength(len); };
+    wrap.appendChild(btn);
+  });
+  app.appendChild(wrap);
+}
+
 function renderGoalSelect() {
   const app = document.getElementById('app');
   app.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'goal-screen';
-  wrap.innerHTML = '<h2>What is your goal?</h2><p>Pick a starting point. You can swap individual exercises anytime, and choose a new goal after each 8-week cycle.</p>';
-
+  wrap.innerHTML = '<h2>What is your goal?</h2><p>' + state.selectedLength + '-week program</p>';
   Object.keys(goalTemplates).forEach(function(key) {
     const btn = document.createElement('button');
     btn.className = 'goal-btn';
     btn.innerHTML = goalTemplates[key].label + '<div class="desc">' + goalTemplates[key].desc + '</div>';
-    btn.onclick = function() { chooseGoal(key); };
+    btn.onclick = function() { chooseGoalTop(key); };
     wrap.appendChild(btn);
   });
+  const back = document.createElement('button');
+  back.className = 'modal-close';
+  back.textContent = 'Back';
+  back.onclick = function() { state.screen = 'select_length'; saveState(); render(); };
+  wrap.appendChild(back);
+  app.appendChild(wrap);
+}
 
+function renderSubgoalSelect() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  const tmpl = goalTemplates[state.selectedGoal];
+  wrap.innerHTML = '<h2>Choose a focus</h2><p>' + state.selectedLength + '-week ' + tmpl.label + '</p>';
+  tmpl.subgoals.forEach(function(sub) {
+    const available = isProgramAvailable(state.selectedLength, state.selectedGoal, sub);
+    const btn = document.createElement('button');
+    btn.className = 'goal-btn';
+    btn.style.opacity = available ? '1' : '0.5';
+    btn.innerHTML = tmpl.subgoalLabels[sub] + (available ? '' : '<div class="desc">Coming soon for this length</div>');
+    btn.onclick = function() {
+      if (!available) { toast('Coming soon'); return; }
+      chooseSubgoal(sub);
+    };
+    wrap.appendChild(btn);
+  });
+  const back = document.createElement('button');
+  back.className = 'modal-close';
+  back.textContent = 'Back';
+  back.onclick = function() { state.screen = 'select_goal'; saveState(); render(); };
+  wrap.appendChild(back);
   app.appendChild(wrap);
 }
 
@@ -507,14 +566,15 @@ function renderWeekPicker(container) {
   container.appendChild(header);
 
   const wp = header.querySelector('#week-picker');
-  for (let i = 1; i <= 8; i++) {
+  const totalWeeks = state.programLength || 8;
+  for (let i = 1; i <= totalWeeks; i++) {
     const b = document.createElement('button');
     b.className = 'week-btn' + (state.week === i ? ' active' : '');
     b.innerHTML = 'Wk ' + i + (isWeekComplete(i) ? '<span class="tab-check">&#10003;</span>' : '');
     b.onclick = (function(i) { return function() { state.week = i; saveState(); render(); }; })(i);
     wp.appendChild(b);
   }
-  header.querySelector('#week-sub').textContent = 'Cycle ' + state.cycle + ' - Week ' + state.week;
+  header.querySelector('#week-sub').textContent = 'Cycle ' + state.cycle + ' - Week ' + state.week + ' of ' + totalWeeks;
 }
 
 function renderDayTabs(container) {
@@ -677,6 +737,9 @@ function renderDayContent(container) {
     banner.className = 'rest-note';
     banner.innerHTML = day.items.map(function(i) { return '<div style="padding:4px 0">' + i + '</div>'; }).join('');
     content.appendChild(banner);
+    if (day.stepsGoal) {
+      content.appendChild(renderStepsBlock(state.day, day.stepsGoal));
+    }
     content.appendChild(renderTrackedBlock(state.day, '__rest_' + state.day + '__', 'Completed this day', false));
     container.appendChild(content);
     return;
@@ -730,7 +793,44 @@ function renderDayContent(container) {
   container.appendChild(content);
 }
 
-function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
+function renderStepsBlock(dayKey, stepsGoalText) {
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  const entry = getEntry(dayKey, '__steps__', state.week) || {};
+  const label = stepsGoalText ? ('Steps (goal: ' + stepsGoalText + ')') : 'Steps';
+  wrap.innerHTML = '<p class="ex-name">' + label + '</p>';
+  const row = document.createElement('div');
+  row.className = 'weight-row';
+  row.innerHTML = '<label>Today</label><input type="number" inputmode="numeric" placeholder="0" value="' + (entry.weight || '') + '" /><span class="unit">steps</span>';
+  const input = row.querySelector('input');
+  input.addEventListener('change', function() {
+    if (input.value) {
+      setEntry(dayKey, '__steps__', state.week, 'weight', input.value);
+      setEntry(dayKey, '__steps__', state.week, 'date', todayStr());
+    } else {
+      clearEntry(dayKey, '__steps__', state.week);
+    }
+    render();
+  });
+  wrap.appendChild(row);
+  if (entry.date) {
+    const dn = document.createElement('div');
+    dn.className = 'prev-weight';
+    dn.textContent = 'Logged: ' + entry.date;
+    wrap.appendChild(dn);
+  }
+  const lastElsewhere = getLastKnownWeightAnyDay('__steps__', dayKey, state.week);
+  if (lastElsewhere && !entry.weight) {
+    const ref = document.createElement('div');
+    ref.className = 'prev-weight';
+    ref.style.cssText = 'font-style:italic;color:#a15a1c;';
+    const otherDayLabel = state.activePlan[lastElsewhere.dayKey] ? state.activePlan[lastElsewhere.dayKey].label : lastElsewhere.dayKey;
+    ref.textContent = lastElsewhere.entry.weight + ' steps logged ' + (lastElsewhere.entry.date || '') + ' (' + otherDayLabel + ', reference only)';
+    wrap.appendChild(ref);
+  }
+  if (entry.weight) wrap.classList.add('ex-complete');
+  return wrap;
+}
   const row = document.createElement('div');
   row.className = 'cp-row';
   const val = (state.checkpoints[cpKey] && state.checkpoints[cpKey][fieldKey]) || '';
@@ -861,22 +961,40 @@ function renderProgressScreen(container) {
   restartBtn.textContent = 'Start New Cycle';
   restartBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;';
   restartBtn.onclick = function() {
-    if (confirm('Start a new cycle? Your current cycle data stays saved for progress tracking, and you will pick a goal for the new cycle.')) {
+    if (confirm('Start a new cycle? Your current cycle data stays saved for progress tracking, and you will choose a new program length and goal.')) {
       const hasData = state.checkpoints && ((state.checkpoints.start && state.checkpoints.start.weight) || (state.checkpoints.week4 && state.checkpoints.week4.weight) || (state.checkpoints.week8 && state.checkpoints.week8.weight));
       if (hasData) {
         state.archivedCheckpoints.push({ cycle: state.cycle, start: state.checkpoints.start, week4: state.checkpoints.week4, week8: state.checkpoints.week8 });
       }
-      state.goalHistory.push({ cycle: state.cycle, goal: state.goal });
+      state.goalHistory.push({ cycle: state.cycle, goal: state.goal, length: state.programLength });
       state.checkpoints = { start: {}, week4: {}, week8: {} };
       state.cycle += 1;
       state.week = 1;
-      state.screen = 'goal_select';
+      state.screen = 'select_length';
       saveState();
       render();
     }
   };
   restartWrap.appendChild(restartBtn);
   content.appendChild(restartWrap);
+
+  const stepsEntries = [];
+  Object.keys(state.activePlan).forEach(function(dayKey) {
+    for (let c = 1; c <= state.cycle; c++) {
+      for (let w = 1; w <= (state.programLength || 8); w++) {
+        const e = getEntry(dayKey, '__steps__', w, c);
+        if (e && e.weight) stepsEntries.push({ week: w, cycle: c, dayKey: dayKey, weight: parseFloat(e.weight) });
+      }
+    }
+  });
+  if (stepsEntries.length >= 2) {
+    stepsEntries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    const stepPoints = stepsEntries.map(function(e) {
+      const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
+      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight };
+    });
+    content.appendChild(buildLineChart('Daily Steps', stepPoints, '#3a7ae8'));
+  }
 
   const seen = {};
   Object.keys(exerciseLibrary).forEach(function(exId) {
@@ -970,8 +1088,16 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
 
-  if (state.screen === 'goal_select') {
+  if (state.screen === 'select_length') {
+    renderLengthSelect();
+    return;
+  }
+  if (state.screen === 'select_goal') {
     renderGoalSelect();
+    return;
+  }
+  if (state.screen === 'select_subgoal') {
+    renderSubgoalSelect();
     return;
   }
 
