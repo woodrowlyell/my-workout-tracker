@@ -205,7 +205,10 @@ let state = {
   goalHistory: [],
   migratedToPerDay: false,
   shownDayTip: false,
-  shownWeekTip: false
+  shownWeekTip: false,
+  celebratedDays: [],
+  celebratedWeeks: [],
+  celebratedCycles: []
 };
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -501,6 +504,87 @@ function openSwapModal(dayKey, exIndex) {
   overlay.appendChild(sheet);
   overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
   document.body.appendChild(overlay);
+}
+
+const encouragementPhrases = {
+  day: [
+    'Great job finishing your day!',
+    'You showed up and got it done!',
+    'That is exactly how progress happens!',
+    'Nice work, one more day in the books!',
+    'You are doing amazing!',
+    'Consistency like this pays off!',
+    'Look at you go!',
+    'Every day like this adds up!'
+  ],
+  week: [
+    'A full week complete, well done!',
+    'I knew you could do it!',
+    'That is a full week of showing up for yourself!',
+    'You are building real momentum!',
+    'Fantastic week of work!',
+    'You are proving what consistency looks like!',
+    'One more week closer to your goal!'
+  ],
+  cycle: [
+    'You finished the whole program, incredible work!',
+    'A full cycle complete, that is a real achievement!',
+    'Look how far you have come!',
+    'You committed and followed through, amazing!',
+    'That is a huge accomplishment, be proud!',
+    'You did the whole thing, outstanding!'
+  ]
+};
+
+function pickPhrase(context) {
+  const list = encouragementPhrases[context];
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function showEncouragementModal(context) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-sheet';
+  sheet.style.textAlign = 'center';
+  sheet.innerHTML = '<h3 style="font-size:22px;">' + pickPhrase(context) + '</h3>';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'modal-close';
+  closeBtn.style.cssText = 'background:#1c1c1a;color:#fff;';
+  closeBtn.textContent = 'Keep Going';
+  closeBtn.onclick = function() { document.body.removeChild(overlay); };
+  sheet.appendChild(closeBtn);
+  overlay.appendChild(sheet);
+  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+  document.body.appendChild(overlay);
+}
+
+function checkAndCelebrate(dayKey, week) {
+  const dayCelebrationKey = 'c' + state.cycle + '-w' + week + '-' + dayKey;
+  if (isDayComplete(dayKey, week) && state.celebratedDays.indexOf(dayCelebrationKey) === -1) {
+    state.celebratedDays.push(dayCelebrationKey);
+    saveState();
+    setTimeout(function() { showEncouragementModal('day'); }, 350);
+    return;
+  }
+  const weekCelebrationKey = 'c' + state.cycle + '-w' + week;
+  if (isWeekComplete(week) && state.celebratedWeeks.indexOf(weekCelebrationKey) === -1) {
+    state.celebratedWeeks.push(weekCelebrationKey);
+    saveState();
+    setTimeout(function() { showEncouragementModal('week'); }, 350);
+    return;
+  }
+  const totalWeeks = state.programLength || 8;
+  let allWeeksDone = true;
+  for (let w = 1; w <= totalWeeks; w++) {
+    if (!isWeekComplete(w)) { allWeeksDone = false; break; }
+  }
+  const cycleCelebrationKey = 'c' + state.cycle;
+  if (allWeeksDone && state.celebratedCycles.indexOf(cycleCelebrationKey) === -1) {
+    state.celebratedCycles.push(cycleCelebrationKey);
+    saveState();
+    setTimeout(function() { showEncouragementModal('cycle'); }, 350);
+  }
 }
 
 function showTipModal(context) {
@@ -814,14 +898,15 @@ function renderDayContent(container) {
     db.className = 'day-complete-banner';
     db.textContent = 'Day complete, nice work.';
     content.appendChild(db);
+    checkAndCelebrate(state.day, state.week);
     if (!state.shownDayTip) {
       state.shownDayTip = true;
       saveState();
-      setTimeout(function() { showTipModal('day'); }, 400);
+      setTimeout(function() { showTipModal('day'); }, 1400);
     } else if (!state.shownWeekTip && isWeekComplete(state.week)) {
       state.shownWeekTip = true;
       saveState();
-      setTimeout(function() { showTipModal('week'); }, 400);
+      setTimeout(function() { showTipModal('week'); }, 1400);
     }
   }
   const mobLabel = document.createElement('div');
