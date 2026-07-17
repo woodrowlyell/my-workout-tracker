@@ -248,12 +248,62 @@ async function loadState() {
     const raw = localStorage.getItem('workout-state-v3');
     if (raw) {
       state = Object.assign({}, state, JSON.parse(raw));
+      migrateToPerDayKeys();
     }
   } catch (e) {}
   if (!state.goal || !state.activePlan) {
     state.screen = 'goal_select';
   }
   render();
+}
+
+function migrateToPerDayKeys() {
+  if (state.migratedToPerDay) return;
+  if (!state.activePlan) return;
+
+  const oldKeyPattern = /^([a-zA-Z0-9_]+)::c(\d+)::w(\d+)$/;
+  const newWeights = {};
+  let migratedCount = 0;
+
+  Object.keys(state.weights).forEach(function(oldKey) {
+    const alreadyNewFormat = oldKey.split('::').length === 4;
+    if (alreadyNewFormat) {
+      newWeights[oldKey] = state.weights[oldKey];
+      return;
+    }
+    const match = oldKey.match(oldKeyPattern);
+    if (!match) {
+      newWeights[oldKey] = state.weights[oldKey];
+      return;
+    }
+    const exId = match[1];
+    const cycle = match[2];
+    const week = match[3];
+
+    let ownerDay = null;
+    Object.keys(state.activePlan).forEach(function(dayKey) {
+      const day = state.activePlan[dayKey];
+      if (day.rest) return;
+      if (day.exerciseIds && day.exerciseIds.indexOf(exId) !== -1) {
+        if (!ownerDay) ownerDay = dayKey;
+      }
+    });
+
+    if (ownerDay) {
+      const newKey = ownerDay + '::' + exId + '::c' + cycle + '::w' + week;
+      newWeights[newKey] = state.weights[oldKey];
+      migratedCount++;
+    } else {
+      newWeights[oldKey] = state.weights[oldKey];
+    }
+  });
+
+  state.weights = newWeights;
+  state.migratedToPerDay = true;
+  saveState();
+  if (migratedCount > 0) {
+    toast('Data updated: ' + migratedCount + ' entries migrated');
+  }
 }
 
 function chooseGoal(goalKey) {
@@ -265,45 +315,65 @@ function chooseGoal(goalKey) {
   render();
 }
 
-function getEntry(exId, week, cycle) {
+function getEntry(dayKey, exId, week, cycle) {
   const c = cycle !== undefined ? cycle : state.cycle;
-  const k = exId + '::c' + c + '::w' + week;
+  const k = dayKey + '::' + exId + '::c' + c + '::w' + week;
   return state.weights[k] || null;
 }
-function setEntry(exId, week, field, val) {
-  const k = exId + '::c' + state.cycle + '::w' + week;
+function setEntry(dayKey, exId, week, field, val) {
+  const k = dayKey + '::' + exId + '::c' + state.cycle + '::w' + week;
   if (!state.weights[k]) state.weights[k] = {};
   state.weights[k][field] = val;
   saveState();
 }
-function clearEntry(exId, week) {
-  const k = exId + '::c' + state.cycle + '::w' + week;
+function clearEntry(dayKey, exId, week) {
+  const k = dayKey + '::' + exId + '::c' + state.cycle + '::w' + week;
   delete state.weights[k];
   saveState();
 }
-function getPrevEntry(exId, week) {
+function getPrevEntry(dayKey, exId, week) {
   for (let w = week - 1; w >= 1; w--) {
-    const e = getEntry(exId, w);
+    const e = getEntry(dayKey, exId, w);
     if (e && (e.weight || e.done)) return { week: w, entry: e };
   }
   if (state.cycle > 1) {
     for (let c = state.cycle - 1; c >= 1; c--) {
       for (let w = 8; w >= 1; w--) {
-        const e = getEntry(exId, w, c);
+        const e = getEntry(dayKey, exId, w, c);
         if (e && (e.weight || e.done)) return { week: w, entry: e, cycle: c };
       }
     }
   }
   return null;
 }
-function getAllEntries(exId) {
-  const results = [];
-  for (let c = 1; c <= state.cycle; c++) {
-    for (let w = 1; w <= 8; w++) {
-      const e = getEntry(exId, w, c);
-      if (e && e.weight) results.push({ week: w, cycle: c, weight: parseFloat(e.weight), date: e.date });
+function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
+  const c = cycle !== undefined ? cycle : state.cycle;
+  let best = null;
+  Object.keys(state.activePlan).forEach(function(dayKey) {
+    const day = state.activePlan[dayKey];
+    if (day.rest || !day.exerciseIds || day.exerciseIds.indexOf(exId) === -1) return;
+    for (let w = week; w >= 1; w--) {
+      if (dayKey === excludeDayKey && w === week) continue;
+      const e = getEntry(dayKey, exId, w, c);
+      if (e && e.weight) {
+        if (!best || w > best.week || (w === best.week && dayKey > best.dayKey)) {
+          best = { week: w, entry: e, dayKey: dayKey };
+        }
+      }
     }
-  }
+  });
+  return best;
+}
+function getAllEntriesForExercise(exId) {
+  const results = [];
+  Object.keys(state.activePlan).forEach(function(dayKey) {
+    for (let c = 1; c <= state.cycle; c++) {
+      for (let w = 1; w <= 8; w++) {
+        const e = getEntry(dayKey, exId, w, c);
+        if (e && e.weight) results.push({ week: w, cycle: c, dayKey: dayKey, weight: parseFloat(e.weight), date: e.date });
+      }
+    }
+  });
   return results;
 }
 
@@ -311,17 +381,17 @@ function isDayComplete(dayKey, week) {
   const day = state.activePlan[dayKey];
   if (!day) return false;
   if (day.rest) {
-    const e = getEntry('__rest_' + dayKey + '__', week);
+    const e = getEntry(dayKey, '__rest_' + dayKey + '__', week);
     return !!(e && e.done);
   }
-  const mob = getEntry('__mobility_' + dayKey + '__', week);
+  const mob = getEntry(dayKey, '__mobility_' + dayKey + '__', week);
   if (!mob || !mob.done) return false;
-  const cardio = getEntry('__cardio_' + dayKey + '__', week);
+  const cardio = getEntry(dayKey, '__cardio_' + dayKey + '__', week);
   if (!cardio || !cardio.done) return false;
   for (let i = 0; i < day.exerciseIds.length; i++) {
     const exId = day.exerciseIds[i];
     const ex = exerciseLibrary[exId];
-    const e = getEntry(exId, week);
+    const e = getEntry(dayKey, exId, week);
     if (ex.noWeight) {
       if (!e || !e.done) return false;
     } else {
@@ -329,7 +399,7 @@ function isDayComplete(dayKey, week) {
     }
   }
   if (day.finisherId) {
-    const fin = getEntry('__finisher_' + dayKey + '__', week);
+    const fin = getEntry(dayKey, '__finisher_' + dayKey + '__', week);
     if (!fin || !fin.done) return false;
   }
   return true;
@@ -507,17 +577,17 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   card.appendChild(top);
 
   if (ex.noWeight) {
-    const entry = getEntry(exId, state.week) || {};
+    const entry = getEntry(dayKey, exId, state.week) || {};
     const row = document.createElement('div');
     row.className = 'check-row';
     row.innerHTML = '<input type="checkbox" ' + (entry.done ? 'checked' : '') + ' /> <label>Completed this week</label>';
     const input = row.querySelector('input');
     input.addEventListener('change', function() {
       if (input.checked) {
-        setEntry(exId, state.week, 'done', true);
-        setEntry(exId, state.week, 'date', todayStr());
+        setEntry(dayKey, exId, state.week, 'done', true);
+        setEntry(dayKey, exId, state.week, 'date', todayStr());
       } else {
-        clearEntry(exId, state.week);
+        clearEntry(dayKey, exId, state.week);
       }
       render();
     });
@@ -526,17 +596,17 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     return card;
   }
 
-  const entry = getEntry(exId, state.week) || {};
+  const entry = getEntry(dayKey, exId, state.week) || {};
   const row = document.createElement('div');
   row.className = 'weight-row';
   row.innerHTML = '<label>This week</label><input type="number" inputmode="decimal" placeholder="0" value="' + (entry.weight || '') + '" /><span class="unit">lbs</span>';
   const input = row.querySelector('input');
   input.addEventListener('change', function() {
     if (input.value) {
-      setEntry(exId, state.week, 'weight', input.value);
-      setEntry(exId, state.week, 'date', todayStr());
+      setEntry(dayKey, exId, state.week, 'weight', input.value);
+      setEntry(dayKey, exId, state.week, 'date', todayStr());
     } else {
-      clearEntry(exId, state.week);
+      clearEntry(dayKey, exId, state.week);
     }
     render();
   });
@@ -549,13 +619,23 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     card.appendChild(dn);
   }
 
-  const prev = getPrevEntry(exId, state.week);
+  const prev = getPrevEntry(dayKey, exId, state.week);
   if (prev) {
     const p = document.createElement('div');
     p.className = 'prev-weight';
     const cTag = prev.cycle ? ('Cycle ' + prev.cycle + ', ') : '';
-    p.textContent = cTag + 'Week ' + prev.week + ': ' + prev.entry.weight + ' lbs';
+    p.textContent = cTag + 'Week ' + prev.week + ' (this day): ' + prev.entry.weight + ' lbs';
     card.appendChild(p);
+  }
+
+  const lastElsewhere = getLastKnownWeightAnyDay(exId, dayKey, state.week);
+  if (lastElsewhere && !entry.weight) {
+    const ref = document.createElement('div');
+    ref.className = 'prev-weight';
+    ref.style.cssText = 'font-style:italic;color:#a15a1c;';
+    const otherDayLabel = state.activePlan[lastElsewhere.dayKey] ? state.activePlan[lastElsewhere.dayKey].label : lastElsewhere.dayKey;
+    ref.textContent = lastElsewhere.entry.weight + ' lbs logged ' + (lastElsewhere.entry.date || '') + ' (' + otherDayLabel + ', reference only)';
+    card.appendChild(ref);
   }
 
   if (entry.weight) card.classList.add('ex-complete');
@@ -568,17 +648,17 @@ function renderTrackedBlock(dayKey, blockKey, label, showMobilityList) {
   if (showMobilityList) {
     wrap.innerHTML = mobility.items.map(function(i) { return '<div style="padding:2px 0">' + i + '</div>'; }).join('');
   }
-  const entry = getEntry(blockKey, state.week) || {};
+  const entry = getEntry(dayKey, blockKey, state.week) || {};
   const row = document.createElement('div');
   row.className = 'check-row';
   row.innerHTML = '<input type="checkbox" ' + (entry.done ? 'checked' : '') + ' /> <label>' + label + '</label>';
   const input = row.querySelector('input');
   input.addEventListener('change', function() {
     if (input.checked) {
-      setEntry(blockKey, state.week, 'done', true);
-      setEntry(blockKey, state.week, 'date', todayStr());
+      setEntry(dayKey, blockKey, state.week, 'done', true);
+      setEntry(dayKey, blockKey, state.week, 'date', todayStr());
     } else {
-      clearEntry(blockKey, state.week);
+      clearEntry(dayKey, blockKey, state.week);
     }
     render();
   });
@@ -800,7 +880,7 @@ function renderProgressScreen(container) {
 
   const seen = {};
   Object.keys(exerciseLibrary).forEach(function(exId) {
-    const entries = getAllEntries(exId);
+    const entries = getAllEntriesForExercise(exId);
     if (entries.length === 0) return;
     seen[exId] = true;
     const card = document.createElement('div');
@@ -816,7 +896,11 @@ function renderProgressScreen(container) {
       content.appendChild(card);
       return;
     }
-    const points = entries.map(function(e) { return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)), val: e.weight }; });
+    entries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    const points = entries.map(function(e) {
+      const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
+      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight };
+    });
     const chart = buildLineChart('', points, '#e8722c');
     card.innerHTML += chart.innerHTML;
     content.appendChild(card);
