@@ -192,6 +192,270 @@ const programLibrary = {
       sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
       sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
     }
+  },
+  '4_get_stronger_arms': {
+    days: {
+      mon: { label: 'Mon Arms & Chest', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'triceps_pushdown', 'hammer_curl'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Legs (Maintenance)', warmupId: 'bike', exerciseIds: ['goblet_squat', 'seated_leg_curl'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: chest', 'Stretch: triceps'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Arms & Back', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'cable_curl', 'triceps_kickback'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Arms', warmupId: 'treadmill', exerciseIds: ['db_shoulder_press', 'db_curl', 'overhead_triceps_ext', 'cable_lateral_raise'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '8_get_stronger_arms': {
+    days: {
+      mon: { label: 'Mon Chest & Triceps', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'triceps_pushdown', 'triceps_kickback'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Legs (Maintenance)', warmupId: 'bike', exerciseIds: ['goblet_squat', 'leg_press', 'seated_leg_curl'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: chest', 'Stretch: triceps', 'Stretch: biceps'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Back & Biceps', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'seated_cable_row', 'hammer_curl', 'cable_curl'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Shoulders & Arms', warmupId: 'treadmill', exerciseIds: ['db_shoulder_press', 'cable_lateral_raise', 'db_curl', 'overhead_triceps_ext'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '12_get_stronger_arms': {
+    days: {
+      mon: { label: 'Mon Chest & Triceps', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'flat_db_press', 'triceps_pushdown', 'triceps_kickback'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Legs (Maintenance)', warmupId: 'bike', exerciseIds: ['goblet_squat', 'leg_press', 'seated_leg_curl', 'calf_raise_machine'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: chest', 'Stretch: triceps', 'Stretch: biceps'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Back & Biceps', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'seated_cable_row', 'chest_supported_row', 'hammer_curl', 'cable_curl', 'db_curl'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Shoulders & Arms', warmupId: 'treadmill', exerciseIds: ['db_shoulder_press', 'shoulder_press_machine', 'cable_lateral_raise', 'db_lateral_raise', 'overhead_triceps_ext'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '4_get_stronger_legs': {
+    days: {
+      mon: { label: 'Mon Legs', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'leg_press', 'seated_leg_curl'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Upper (Maintenance)', warmupId: 'bike', exerciseIds: ['chest_press_machine', 'lat_pulldown'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: quads'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Legs', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'walking_lunge', 'calf_raise_machine'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Legs', warmupId: 'treadmill', exerciseIds: ['leg_press', 'leg_extension', 'seated_leg_curl', 'calf_raise_machine'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '8_get_stronger_legs': {
+    days: {
+      mon: { label: 'Mon Quads & Glutes', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'leg_press', 'goblet_squat', 'leg_extension'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Upper (Maintenance)', warmupId: 'bike', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'shoulder_press_machine'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: quads', 'Stretch: calves'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Hamstrings & Calves', warmupId: 'treadmill', exerciseIds: ['seated_leg_curl', 'walking_lunge', 'calf_raise_machine', 'plank'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Legs', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'leg_press', 'leg_extension', 'seated_leg_curl', 'calf_raise_machine'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '12_get_stronger_legs': {
+    days: {
+      mon: { label: 'Mon Quads & Glutes', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'leg_press', 'goblet_squat', 'leg_extension', 'walking_lunge'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Upper (Maintenance)', warmupId: 'bike', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'shoulder_press_machine', 'triceps_pushdown'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: quads', 'Stretch: calves'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Hamstrings & Calves', warmupId: 'treadmill', exerciseIds: ['seated_leg_curl', 'smith_rdl', 'calf_raise_machine', 'bodyweight_calf_raise', 'plank'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Legs', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'leg_press', 'leg_extension', 'seated_leg_curl', 'walking_lunge', 'calf_raise_machine'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '4_get_stronger_core': {
+    days: {
+      mon: { label: 'Mon Full Body & Core', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'chest_press_machine', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Core & Back', warmupId: 'bike', exerciseIds: ['lat_pulldown', 'cable_woodchop'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hip flexors', 'Stretch: chest'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Full Body & Core', warmupId: 'treadmill', exerciseIds: ['leg_press', 'shoulder_press_machine', 'ab_crunch_machine'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Core & Strength', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'farmer_carry', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '8_get_stronger_core': {
+    days: {
+      mon: { label: 'Mon Full Body & Core', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'chest_press_machine', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Back & Core', warmupId: 'bike', exerciseIds: ['lat_pulldown', 'seated_leg_curl', 'ab_crunch_machine', 'farmer_carry'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hip flexors', 'Stretch: chest'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Legs & Core', warmupId: 'treadmill', exerciseIds: ['leg_press', 'shoulder_press_machine', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body & Core', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'chest_supported_row', 'ab_crunch_machine', 'farmer_carry'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '12_get_stronger_core': {
+    days: {
+      mon: { label: 'Mon Full Body & Core', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'chest_press_machine', 'incline_db_press', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Back & Core', warmupId: 'bike', exerciseIds: ['lat_pulldown', 'seated_cable_row', 'seated_leg_curl', 'ab_crunch_machine', 'farmer_carry'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hip flexors', 'Stretch: chest'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Legs & Core', warmupId: 'treadmill', exerciseIds: ['leg_press', 'shoulder_press_machine', 'leg_extension', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body & Core', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'chest_supported_row', 'ab_crunch_machine', 'farmer_carry', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] }
+    }
+  },
+  '4_get_stronger_sustain': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'shoulder_press_machine'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '8_get_stronger_sustain': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'shoulder_press_machine', 'ab_crunch_machine'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'lat_pulldown', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '12_get_stronger_sustain': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat', 'plank', 'ab_crunch_machine'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'shoulder_press_machine', 'seated_leg_curl'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'lat_pulldown', 'cable_curl', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '4_strengthen_core': {
+    days: {
+      mon: { label: 'Mon Full Body & Core', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'chest_press_machine', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Core Focus', warmupId: 'bike', exerciseIds: ['ab_crunch_machine', 'cable_woodchop'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hip flexors', 'Stretch: obliques'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Full Body & Core', warmupId: 'treadmill', exerciseIds: ['leg_press', 'lat_pulldown', 'plank'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Core & Carry', warmupId: 'treadmill', exerciseIds: ['farmer_carry', 'ab_crunch_machine', 'cable_woodchop'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '8_strengthen_core': {
+    days: {
+      mon: { label: 'Mon Full Body & Core', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'chest_press_machine', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Back & Core', warmupId: 'bike', exerciseIds: ['lat_pulldown', 'seated_leg_curl', 'ab_crunch_machine', 'farmer_carry'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hip flexors', 'Stretch: obliques'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Legs & Core', warmupId: 'treadmill', exerciseIds: ['leg_press', 'shoulder_press_machine', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body & Core', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'chest_supported_row', 'ab_crunch_machine', 'farmer_carry'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '12_strengthen_core': {
+    days: {
+      mon: { label: 'Mon Full Body & Core', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'chest_press_machine', 'incline_db_press', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Back & Core', warmupId: 'bike', exerciseIds: ['lat_pulldown', 'seated_cable_row', 'seated_leg_curl', 'ab_crunch_machine', 'farmer_carry'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hip flexors', 'Stretch: obliques'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Legs & Core', warmupId: 'treadmill', exerciseIds: ['leg_press', 'shoulder_press_machine', 'leg_extension', 'plank', 'cable_woodchop'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body & Core', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'chest_supported_row', 'ab_crunch_machine', 'farmer_carry', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '4_general_fitness_well_rounded': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'ab_crunch_machine'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'shoulder_press_machine', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '8_general_fitness_well_rounded': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'shoulder_press_machine', 'ab_crunch_machine'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'lat_pulldown', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '12_general_fitness_well_rounded': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat', 'plank', 'ab_crunch_machine'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'shoulder_press_machine', 'seated_leg_curl'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'lat_pulldown', 'hammer_curl', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '4_general_fitness_moderate_volume': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'goblet_squat', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_cable_row', 'shoulder_press_machine'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch major muscle groups'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'hammer_curl'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'goblet_squat', 'ab_crunch_machine'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '8_general_fitness_moderate_volume': {
+    days: {
+      mon: { label: 'Mon Push Focus', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'shoulder_press_machine', 'triceps_pushdown', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Legs Focus', warmupId: 'bike', exerciseIds: ['leg_press', 'seated_leg_curl', 'calf_raise_machine'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch major muscle groups'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Pull Focus', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'seated_cable_row', 'hammer_curl'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'ab_crunch_machine', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '12_general_fitness_moderate_volume': {
+    days: {
+      mon: { label: 'Mon Push Focus', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'shoulder_press_machine', 'triceps_pushdown', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Legs Focus', warmupId: 'bike', exerciseIds: ['leg_press', 'goblet_squat', 'seated_leg_curl', 'calf_raise_machine'], finisherId: null },
+      wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch major muscle groups'], stepsGoal: '10,000+' },
+      thu: { label: 'Thu Pull Focus', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'seated_cable_row', 'hammer_curl', 'cable_curl'], finisherId: 'incline_walk' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'incline_db_press', 'lat_pulldown', 'ab_crunch_machine', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '4_general_fitness_sustain': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'shoulder_press_machine'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '8_general_fitness_sustain': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'plank'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'shoulder_press_machine', 'ab_crunch_machine'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'seated_cable_row', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
+  },
+  '12_general_fitness_sustain': {
+    days: {
+      mon: { label: 'Mon Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'plank', 'ab_crunch_machine'], finisherId: 'incline_walk' },
+      tue: { label: 'Tue Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      wed: { label: 'Wed Full Body', warmupId: 'bike', exerciseIds: ['leg_press', 'shoulder_press_machine', 'seated_leg_curl'], finisherId: null },
+      thu: { label: 'Thu Recovery', rest: true, items: ['20-30 min walk', 'Stretch major muscle groups'], stepsGoal: '8,000+' },
+      fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['smith_rdl', 'seated_cable_row', 'hammer_curl', 'plank'], finisherId: 'incline_walk' },
+      sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk or bike'], stepsGoal: '8,000-10,000' },
+      sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll'] }
+    }
   }
 };
 
