@@ -89,26 +89,21 @@ const exerciseLibrary = {
   flat_db_press: { name: 'Flat dumbbell press', muscle: 'chest', scheme: '3 x 10', link: YT('flat dumbbell press proper form') },
   pushup: { name: 'Push-up', muscle: 'chest', scheme: '3 x 12', link: YT('push up proper form'), noWeight: true },
   cable_chest_press: { name: 'Standing cable chest press', muscle: 'chest', scheme: '3 x 12', link: YT('standing cable chest press form') },
-
   shoulder_press_machine: { name: 'Seated shoulder press', muscle: 'shoulders', scheme: '3 x 10', link: YT('seated shoulder press machine form') },
   db_shoulder_press: { name: 'Dumbbell shoulder press', muscle: 'shoulders', scheme: '3 x 10', link: YT('dumbbell shoulder press proper form') },
   cable_lateral_raise: { name: 'Cable lateral raise', muscle: 'shoulders', scheme: '3 x 12', link: YT('cable lateral raise form') },
   db_lateral_raise: { name: 'Dumbbell lateral raise', muscle: 'shoulders', scheme: '3 x 12', link: YT('dumbbell lateral raise form') },
-
   triceps_pushdown: { name: 'Triceps rope pushdown', muscle: 'triceps', scheme: '3 x 12', link: YT('triceps rope pushdown proper form') },
   triceps_kickback: { name: 'Triceps kickback', muscle: 'triceps', scheme: '3 x 12', link: YT('triceps kickback proper form') },
   overhead_triceps_ext: { name: 'Overhead triceps extension', muscle: 'triceps', scheme: '3 x 12', link: YT('overhead triceps extension form') },
-
   lat_pulldown: { name: 'Lat pulldown', muscle: 'back', scheme: '3 x 10', link: YT('lat pulldown proper form') },
   chest_supported_row: { name: 'Chest supported row', muscle: 'back', scheme: '3 x 10', link: YT('chest supported row machine form') },
   seated_cable_row: { name: 'Seated cable row', muscle: 'back', scheme: '3 x 10', link: YT('seated cable row proper form') },
   face_pull: { name: 'Face pulls', muscle: 'back', scheme: '3 x 15', link: YT('cable face pull proper form') },
   straight_arm_pulldown: { name: 'Straight-arm cable pulldown', muscle: 'back', scheme: '3 x 12', link: YT('straight arm pulldown proper form') },
-
   hammer_curl: { name: 'Hammer curl', muscle: 'biceps', scheme: '3 x 12', link: YT('dumbbell hammer curl form') },
   cable_curl: { name: 'Cable curl', muscle: 'biceps', scheme: '2 x 12', link: YT('cable curl proper form') },
   db_curl: { name: 'Dumbbell curl', muscle: 'biceps', scheme: '3 x 12', link: YT('dumbbell curl proper form') },
-
   smith_rdl: { name: 'Smith machine Romanian deadlift', muscle: 'legs_posterior', scheme: '4 x 10', link: YT('smith machine romanian deadlift tutorial') },
   leg_press: { name: 'Leg press', muscle: 'legs_general', scheme: '3 x 12', link: YT('leg press machine proper form') },
   walking_lunge: { name: 'Walking lunges', muscle: 'legs_general', scheme: '2 x 12 each leg', link: YT('walking lunges proper form'), noWeight: true },
@@ -118,12 +113,10 @@ const exerciseLibrary = {
   leg_extension: { name: 'Leg extension', muscle: 'legs_quad', scheme: '3 x 12', link: YT('leg extension machine proper form') },
   calf_raise_machine: { name: 'Calf raise machine', muscle: 'calves', scheme: '3 x 15', link: YT('calf raise machine proper form') },
   bodyweight_calf_raise: { name: 'Bodyweight calf raise', muscle: 'calves', scheme: '3 x 15', link: YT('bodyweight calf raise proper form'), noWeight: true },
-
   plank: { name: 'Plank', muscle: 'core', scheme: '3 x 45 sec', link: YT('plank proper form'), noWeight: true },
   cable_woodchop: { name: 'Cable wood chop', muscle: 'core', scheme: '3 x 12 each side', link: YT('cable wood chop proper form') },
   ab_crunch_machine: { name: 'Abdominal crunch machine', muscle: 'core', scheme: '3 x 15', link: YT('abdominal crunch machine proper form') },
   farmer_carry: { name: 'Farmer carry', muscle: 'core', scheme: '3 x 45 sec', link: YT('farmer carry proper form'), noWeight: true },
-
   treadmill: { name: 'Treadmill', muscle: 'cardio', scheme: '5 min', link: null, noWeight: true },
   bike: { name: 'Bike', muscle: 'cardio', scheme: '5 min', link: null, noWeight: true },
   incline_walk: { name: 'Incline walk', muscle: 'cardio', scheme: '10 min', link: null, noWeight: true }
@@ -135,30 +128,6 @@ Object.keys(exerciseLibrary).forEach(function(id) {
   if (!substituteGroups[m]) substituteGroups[m] = [];
   substituteGroups[m].push(id);
 });
-
-const muscleToTag = {
-  chest: 'Push', shoulders: 'Push', triceps: 'Push',
-  back: 'Pull', biceps: 'Pull',
-  legs_posterior: 'Legs', legs_general: 'Legs', legs_quad: 'Legs', calves: 'Legs',
-  core: 'Core', cardio: 'Cardio'
-};
-
-function deriveDayTag(exerciseIds) {
-  if (!exerciseIds || exerciseIds.length === 0) return '';
-  const tagCounts = {};
-  exerciseIds.forEach(function(id) {
-    const muscle = exerciseLibrary[id].muscle;
-    const tag = muscleToTag[muscle] || 'Mixed';
-    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-  });
-  const sorted = Object.keys(tagCounts).map(function(k) { return [k, tagCounts[k]]; }).sort(function(a, b) { return b[1] - a[1]; });
-  if (sorted.length === 0) return '';
-  if (sorted.length === 1) return sorted[0][0];
-  if (sorted[0][1] === sorted[1][1]) {
-    return sorted[0][0] + '/' + sorted[1][0];
-  }
-  return sorted[0][0];
-}
 
 const mobility = {
   items: [
@@ -192,7 +161,6 @@ const goalTemplates = {
 
 const programLibrary = {
   '8_get_stronger_total_body': {
-    stepsGoal: null,
     days: {
       mon: { label: 'Mon Push', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'shoulder_press_machine', 'cable_lateral_raise', 'triceps_pushdown'], finisherId: 'incline_walk' },
       tue: { label: 'Tue Legs', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'walking_lunge', 'seated_leg_curl', 'calf_raise_machine', 'plank'], finisherId: null },
@@ -218,19 +186,23 @@ function getProgram(length, goal, subgoal) {
 }
 
 let state = {
-  screen: 'select_length',
+  screen: 'select_goal',
+  disclaimerAccepted: false,
+  disclaimerAcceptedDate: null,
   selectedLength: null,
   selectedGoal: null,
   selectedSubgoal: null,
   goal: null,
   activePlan: null,
+  programLength: null,
   week: 1,
   cycle: 1,
   day: 'mon',
   weights: {},
   checkpoints: { start: {}, week4: {}, week8: {} },
   archivedCheckpoints: [],
-  goalHistory: []
+  goalHistory: [],
+  migratedToPerDay: false
 };
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -251,28 +223,12 @@ async function saveState() {
   }
 }
 
-async function loadState() {
-  try {
-    const raw = localStorage.getItem('workout-state-v3');
-    if (raw) {
-      state = Object.assign({}, state, JSON.parse(raw));
-      migrateToPerDayKeys();
-    }
-  } catch (e) {}
-  if (!state.goal || !state.activePlan) {
-    state.screen = 'goal_select';
-  }
-  render();
-}
-
 function migrateToPerDayKeys() {
   if (state.migratedToPerDay) return;
   if (!state.activePlan) return;
-
   const oldKeyPattern = /^([a-zA-Z0-9_]+)::c(\d+)::w(\d+)$/;
   const newWeights = {};
   let migratedCount = 0;
-
   Object.keys(state.weights).forEach(function(oldKey) {
     const alreadyNewFormat = oldKey.split('::').length === 4;
     if (alreadyNewFormat) {
@@ -287,7 +243,6 @@ function migrateToPerDayKeys() {
     const exId = match[1];
     const cycle = match[2];
     const week = match[3];
-
     let ownerDay = null;
     Object.keys(state.activePlan).forEach(function(dayKey) {
       const day = state.activePlan[dayKey];
@@ -296,7 +251,6 @@ function migrateToPerDayKeys() {
         if (!ownerDay) ownerDay = dayKey;
       }
     });
-
     if (ownerDay) {
       const newKey = ownerDay + '::' + exId + '::c' + cycle + '::w' + week;
       newWeights[newKey] = state.weights[oldKey];
@@ -305,7 +259,6 @@ function migrateToPerDayKeys() {
       newWeights[oldKey] = state.weights[oldKey];
     }
   });
-
   state.weights = newWeights;
   state.migratedToPerDay = true;
   saveState();
@@ -314,9 +267,90 @@ function migrateToPerDayKeys() {
   }
 }
 
-function chooseGoal(goalKey) {
+async function loadState() {
+  try {
+    const raw = localStorage.getItem('workout-state-v3');
+    if (raw) {
+      state = Object.assign({}, state, JSON.parse(raw));
+      migrateToPerDayKeys();
+    }
+  } catch (e) {}
+  if (!state.disclaimerAccepted) {
+    render();
+    return;
+  }
+  if (!state.goal || !state.activePlan) {
+    state.screen = 'select_goal';
+  }
+  render();
+}
+
+function acceptDisclaimer() {
+  state.disclaimerAccepted = true;
+  state.disclaimerAcceptedDate = todayStr();
+  saveState();
+  if (!state.goal || !state.activePlan) {
+    state.screen = 'select_goal';
+  }
+  render();
+}
+
+function renderDisclaimer() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  wrap.style.textAlign = 'left';
+  wrap.innerHTML = '<h2 style="text-align:center;">Before you begin</h2>' +
+    '<div class="card" style="text-align:left;">' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px;"><strong>Consult your physician.</strong> This app provides general exercise suggestions and is not a substitute for professional medical advice. Talk to your doctor before starting this or any exercise program, especially if you have any existing health conditions, injuries, or concerns.</p>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px;"><strong>Exercise at your own risk.</strong> Stop immediately if you feel pain, dizziness, or discomfort beyond normal exertion, and seek medical attention if needed.</p>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0;"><strong>No guarantee of results.</strong> Individual results vary based on many factors outside this app control.</p>' +
+    '</div>';
+  const btn = document.createElement('button');
+  btn.className = 'goal-btn';
+  btn.style.cssText = 'text-align:center;background:#1c1c1a;color:#fff;border-color:#1c1c1a;margin-top:16px;';
+  btn.textContent = 'I Understand and Agree';
+  btn.onclick = acceptDisclaimer;
+  wrap.appendChild(btn);
+  app.appendChild(wrap);
+}
+
+function chooseGoalTop(goalKey) {
+  state.selectedGoal = goalKey;
+  const tmpl = goalTemplates[goalKey];
+  if (tmpl.subgoals) {
+    state.screen = 'select_subgoal';
+  } else {
+    state.selectedSubgoal = null;
+    state.screen = 'select_length';
+  }
+  saveState();
+  render();
+}
+
+function chooseSubgoal(subgoalKey) {
+  state.selectedSubgoal = subgoalKey;
+  state.screen = 'select_length';
+  saveState();
+  render();
+}
+
+function chooseLength(len) {
+  state.selectedLength = len;
+  finalizeProgram(state.selectedGoal, state.selectedSubgoal);
+}
+
+function finalizeProgram(goalKey, subgoalKey) {
+  if (!isProgramAvailable(state.selectedLength, goalKey, subgoalKey)) {
+    toast('That combination is not ready yet');
+    return;
+  }
+  const program = getProgram(state.selectedLength, goalKey, subgoalKey);
   state.goal = goalKey;
-  state.activePlan = JSON.parse(JSON.stringify(goalTemplates[goalKey].days));
+  state.selectedSubgoal = subgoalKey;
+  state.activePlan = JSON.parse(JSON.stringify(program.days));
+  state.programLength = state.selectedLength;
   state.screen = 'day';
   state.week = 1;
   saveState();
@@ -359,7 +393,8 @@ function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
   let best = null;
   Object.keys(state.activePlan).forEach(function(dayKey) {
     const day = state.activePlan[dayKey];
-    if (day.rest || !day.exerciseIds || day.exerciseIds.indexOf(exId) === -1) return;
+    if (day.rest && exId !== '__steps__') return;
+    if (exId !== '__steps__' && (!day.exerciseIds || day.exerciseIds.indexOf(exId) === -1)) return;
     for (let w = week; w >= 1; w--) {
       if (dayKey === excludeDayKey && w === week) continue;
       const e = getEntry(dayKey, exId, w, c);
@@ -376,7 +411,7 @@ function getAllEntriesForExercise(exId) {
   const results = [];
   Object.keys(state.activePlan).forEach(function(dayKey) {
     for (let c = 1; c <= state.cycle; c++) {
-      for (let w = 1; w <= 8; w++) {
+      for (let w = 1; w <= (state.programLength || 8); w++) {
         const e = getEntry(dayKey, exId, w, c);
         if (e && e.weight) results.push({ week: w, cycle: c, dayKey: dayKey, weight: parseFloat(e.weight), date: e.date });
       }
@@ -431,20 +466,17 @@ function openSwapModal(dayKey, exIndex) {
   const currentExId = day.exerciseIds[exIndex];
   const muscle = exerciseLibrary[currentExId].muscle;
   const options = (substituteGroups[muscle] || []).filter(function(id) { return id !== currentExId; });
-
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
   sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">Choose a replacement that works the same muscle group</div>';
-
   if (options.length === 0) {
     const nd = document.createElement('p');
     nd.style.cssText = 'font-size:13px;color:#999;';
     nd.textContent = 'No alternatives available for this muscle group yet.';
     sheet.appendChild(nd);
   }
-
   options.forEach(function(optId) {
     const opt = document.createElement('div');
     opt.className = 'swap-option';
@@ -452,10 +484,8 @@ function openSwapModal(dayKey, exIndex) {
     optName.className = 'swap-option-name';
     optName.textContent = exerciseLibrary[optId].name;
     opt.appendChild(optName);
-
     const btns = document.createElement('div');
     btns.className = 'swap-btns';
-
     const todayBtn = document.createElement('button');
     todayBtn.className = 'swap-btn today';
     todayBtn.textContent = 'Just today';
@@ -467,7 +497,6 @@ function openSwapModal(dayKey, exIndex) {
       toast('Swapped for today');
     };
     btns.appendChild(todayBtn);
-
     const permBtn = document.createElement('button');
     permBtn.className = 'swap-btn permanent';
     permBtn.textContent = 'Always';
@@ -479,36 +508,17 @@ function openSwapModal(dayKey, exIndex) {
       toast('Swapped going forward');
     };
     btns.appendChild(permBtn);
-
     opt.appendChild(btns);
     sheet.appendChild(opt);
   });
-
   const closeBtn = document.createElement('button');
   closeBtn.className = 'modal-close';
   closeBtn.textContent = 'Cancel';
   closeBtn.onclick = function() { document.body.removeChild(overlay); };
   sheet.appendChild(closeBtn);
-
   overlay.appendChild(sheet);
   overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
   document.body.appendChild(overlay);
-}
-
-function renderLengthSelect() {
-  const app = document.getElementById('app');
-  app.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'goal-screen';
-  wrap.innerHTML = '<h2>Choose a program length</h2><p>You can start a new cycle with a different length or goal anytime after finishing.</p>';
-  [4, 8, 12].forEach(function(len) {
-    const btn = document.createElement('button');
-    btn.className = 'goal-btn';
-    btn.innerHTML = len + ' Weeks';
-    btn.onclick = function() { chooseLength(len); };
-    wrap.appendChild(btn);
-  });
-  app.appendChild(wrap);
 }
 
 function renderGoalSelect() {
@@ -516,7 +526,7 @@ function renderGoalSelect() {
   app.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'goal-screen';
-  wrap.innerHTML = '<h2>What is your goal?</h2><p>' + state.selectedLength + '-week program</p>';
+  wrap.innerHTML = '<h2>What is your goal?</h2><p>Pick a starting point. You can swap individual exercises anytime, and choose a new goal after each cycle.</p>';
   Object.keys(goalTemplates).forEach(function(key) {
     const btn = document.createElement('button');
     btn.className = 'goal-btn';
@@ -524,11 +534,6 @@ function renderGoalSelect() {
     btn.onclick = function() { chooseGoalTop(key); };
     wrap.appendChild(btn);
   });
-  const back = document.createElement('button');
-  back.className = 'modal-close';
-  back.textContent = 'Back';
-  back.onclick = function() { state.screen = 'select_length'; saveState(); render(); };
-  wrap.appendChild(back);
   app.appendChild(wrap);
 }
 
@@ -538,17 +543,12 @@ function renderSubgoalSelect() {
   const wrap = document.createElement('div');
   wrap.className = 'goal-screen';
   const tmpl = goalTemplates[state.selectedGoal];
-  wrap.innerHTML = '<h2>Choose a focus</h2><p>' + state.selectedLength + '-week ' + tmpl.label + '</p>';
+  wrap.innerHTML = '<h2>Choose a focus</h2><p>' + tmpl.label + '</p>';
   tmpl.subgoals.forEach(function(sub) {
-    const available = isProgramAvailable(state.selectedLength, state.selectedGoal, sub);
     const btn = document.createElement('button');
     btn.className = 'goal-btn';
-    btn.style.opacity = available ? '1' : '0.5';
-    btn.innerHTML = tmpl.subgoalLabels[sub] + (available ? '' : '<div class="desc">Coming soon for this length</div>');
-    btn.onclick = function() {
-      if (!available) { toast('Coming soon'); return; }
-      chooseSubgoal(sub);
-    };
+    btn.innerHTML = tmpl.subgoalLabels[sub];
+    btn.onclick = function() { chooseSubgoal(sub); };
     wrap.appendChild(btn);
   });
   const back = document.createElement('button');
@@ -559,64 +559,51 @@ function renderSubgoalSelect() {
   app.appendChild(wrap);
 }
 
-function renderWeekPicker(container) {
-  const header = document.createElement('div');
-  header.className = 'header';
-  header.innerHTML = '<h1>' + goalTemplates[state.goal].label + '</h1><div class="sub" id="week-sub"></div><div class="week-picker" id="week-picker"></div>';
-  container.appendChild(header);
-
-  const wp = header.querySelector('#week-picker');
-  const totalWeeks = state.programLength || 8;
-  for (let i = 1; i <= totalWeeks; i++) {
-    const b = document.createElement('button');
-    b.className = 'week-btn' + (state.week === i ? ' active' : '');
-    b.innerHTML = 'Wk ' + i + (isWeekComplete(i) ? '<span class="tab-check">&#10003;</span>' : '');
-    b.onclick = (function(i) { return function() { state.week = i; saveState(); render(); }; })(i);
-    wp.appendChild(b);
-  }
-  header.querySelector('#week-sub').textContent = 'Cycle ' + state.cycle + ' - Week ' + state.week + ' of ' + totalWeeks;
+function renderLengthSelect() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  const tmpl = goalTemplates[state.selectedGoal];
+  const focusLabel = state.selectedSubgoal ? tmpl.subgoalLabels[state.selectedSubgoal] : tmpl.label;
+  wrap.innerHTML = '<h2>Choose a program length</h2><p>' + focusLabel + '</p>';
+  [4, 8, 12].forEach(function(len) {
+    const available = isProgramAvailable(len, state.selectedGoal, state.selectedSubgoal);
+    const btn = document.createElement('button');
+    btn.className = 'goal-btn';
+    btn.style.opacity = available ? '1' : '0.5';
+    btn.innerHTML = len + ' Weeks' + (available ? '' : '<div class="desc">Coming soon for this focus</div>');
+    btn.onclick = function() {
+      if (!available) { toast('Coming soon'); return; }
+      chooseLength(len);
+    };
+    wrap.appendChild(btn);
+  });
+  const back = document.createElement('button');
+  back.className = 'modal-close';
+  back.textContent = 'Back';
+  back.onclick = function() {
+    state.screen = goalTemplates[state.selectedGoal].subgoals ? 'select_subgoal' : 'select_goal';
+    saveState();
+    render();
+  };
+  wrap.appendChild(back);
+  app.appendChild(wrap);
 }
 
-function renderDayTabs(container) {
-  const dt = document.createElement('div');
-  dt.className = 'day-tabs';
-  const keys = Object.keys(state.activePlan);
-  keys.forEach(function(key) {
-    const b = document.createElement('button');
-    b.className = 'day-tab' + (state.day === key && state.screen === 'day' ? ' active' : '');
-    b.innerHTML = state.activePlan[key].label + (isDayComplete(key, state.week) ? '<span class="tab-check">&#10003;</span>' : '');
-    b.onclick = function() { state.day = key; state.screen = 'day'; saveState(); render(); };
-    dt.appendChild(b);
-  });
-  const cb = document.createElement('button');
-  cb.className = 'day-tab' + (state.screen === 'checkpoints' ? ' active' : '');
-  cb.textContent = 'Checkpoints';
-  cb.onclick = function() { state.screen = 'checkpoints'; saveState(); render(); };
-  dt.appendChild(cb);
-  const pb = document.createElement('button');
-  pb.className = 'day-tab' + (state.screen === 'progress' ? ' active' : '');
-  pb.textContent = 'Progress';
-  pb.onclick = function() { state.screen = 'progress'; saveState(); render(); };
-  dt.appendChild(pb);
-  const db = document.createElement('button');
-  db.className = 'day-tab' + (state.screen === 'debug' ? ' active' : '');
-  db.textContent = 'Storage';
-  db.onclick = function() { state.screen = 'debug'; saveState(); render(); };
-  dt.appendChild(db);
-  container.appendChild(dt);
+function linkIcon() {
+  return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>';
 }
 
 function renderExerciseCard(dayKey, exId, exIndex) {
   const ex = exerciseLibrary[exId];
   const card = document.createElement('div');
   card.className = 'card';
-
   const top = document.createElement('div');
   top.className = 'ex-top';
   const left = document.createElement('div');
   left.innerHTML = '<p class="ex-name">' + ex.name + '</p><p class="ex-scheme">' + ex.scheme + '</p>';
   top.appendChild(left);
-
   const actions = document.createElement('div');
   actions.className = 'ex-actions';
   if (ex.link) {
@@ -635,7 +622,6 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   actions.appendChild(swapBtn);
   top.appendChild(actions);
   card.appendChild(top);
-
   if (ex.noWeight) {
     const entry = getEntry(dayKey, exId, state.week) || {};
     const row = document.createElement('div');
@@ -655,7 +641,6 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     if (entry.done) card.classList.add('ex-complete');
     return card;
   }
-
   const entry = getEntry(dayKey, exId, state.week) || {};
   const row = document.createElement('div');
   row.className = 'weight-row';
@@ -671,14 +656,12 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     render();
   });
   card.appendChild(row);
-
   if (entry.date) {
     const dn = document.createElement('div');
     dn.className = 'prev-weight';
     dn.textContent = 'Logged: ' + entry.date;
     card.appendChild(dn);
   }
-
   const prev = getPrevEntry(dayKey, exId, state.week);
   if (prev) {
     const p = document.createElement('div');
@@ -687,7 +670,6 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     p.textContent = cTag + 'Week ' + prev.week + ' (this day): ' + prev.entry.weight + ' lbs';
     card.appendChild(p);
   }
-
   const lastElsewhere = getLastKnownWeightAnyDay(exId, dayKey, state.week);
   if (lastElsewhere && !entry.weight) {
     const ref = document.createElement('div');
@@ -697,7 +679,6 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     ref.textContent = lastElsewhere.entry.weight + ' lbs logged ' + (lastElsewhere.entry.date || '') + ' (' + otherDayLabel + ', reference only)';
     card.appendChild(ref);
   }
-
   if (entry.weight) card.classList.add('ex-complete');
   return card;
 }
@@ -725,72 +706,6 @@ function renderTrackedBlock(dayKey, blockKey, label, showMobilityList) {
   wrap.appendChild(row);
   if (entry.done) wrap.classList.add('ex-complete');
   return wrap;
-}
-
-function renderDayContent(container) {
-  const content = document.createElement('div');
-  content.className = 'content';
-  const day = state.activePlan[state.day];
-
-  if (day.rest) {
-    const banner = document.createElement('div');
-    banner.className = 'rest-note';
-    banner.innerHTML = day.items.map(function(i) { return '<div style="padding:4px 0">' + i + '</div>'; }).join('');
-    content.appendChild(banner);
-    if (day.stepsGoal) {
-      content.appendChild(renderStepsBlock(state.day, day.stepsGoal));
-    }
-    content.appendChild(renderTrackedBlock(state.day, '__rest_' + state.day + '__', 'Completed this day', false));
-    container.appendChild(content);
-    return;
-  }
-
-  if (isDayComplete(state.day, state.week)) {
-    const db = document.createElement('div');
-    db.className = 'day-complete-banner';
-    db.textContent = 'Day complete, nice work.';
-    content.appendChild(db);
-  }
-
-  const mobLabel = document.createElement('div');
-  mobLabel.className = 'section-label';
-  mobLabel.textContent = 'Mobility warm-up';
-  content.appendChild(mobLabel);
-  content.appendChild(renderTrackedBlock(state.day, '__mobility_' + state.day + '__', 'Completed mobility warm-up', true));
-
-  const cardioLabel = document.createElement('div');
-  cardioLabel.className = 'section-label';
-  cardioLabel.textContent = 'Cardio warm-up';
-  content.appendChild(cardioLabel);
-  const wu = exerciseLibrary[day.warmupId];
-  const wuCard = document.createElement('div');
-  wuCard.className = 'simple-item';
-  wuCard.textContent = wu.name + ' - ' + wu.scheme;
-  content.appendChild(wuCard);
-  content.appendChild(renderTrackedBlock(state.day, '__cardio_' + state.day + '__', 'Completed cardio warm-up', false));
-
-  const exLabel = document.createElement('div');
-  exLabel.className = 'section-label';
-  exLabel.textContent = 'Exercises';
-  content.appendChild(exLabel);
-  day.exerciseIds.forEach(function(exId, idx) {
-    content.appendChild(renderExerciseCard(state.day, exId, idx));
-  });
-
-  if (day.finisherId) {
-    const finLabel = document.createElement('div');
-    finLabel.className = 'section-label';
-    finLabel.textContent = 'Cooldown cardio';
-    content.appendChild(finLabel);
-    const fin = exerciseLibrary[day.finisherId];
-    const finCard = document.createElement('div');
-    finCard.className = 'simple-item';
-    finCard.textContent = fin.name + ' - ' + fin.scheme;
-    content.appendChild(finCard);
-    content.appendChild(renderTrackedBlock(state.day, '__finisher_' + state.day + '__', 'Completed cooldown cardio', false));
-  }
-
-  container.appendChild(content);
 }
 
 function renderStepsBlock(dayKey, stepsGoalText) {
@@ -831,6 +746,67 @@ function renderStepsBlock(dayKey, stepsGoalText) {
   if (entry.weight) wrap.classList.add('ex-complete');
   return wrap;
 }
+
+function renderDayContent(container) {
+  const content = document.createElement('div');
+  content.className = 'content';
+  const day = state.activePlan[state.day];
+  if (day.rest) {
+    const banner = document.createElement('div');
+    banner.className = 'rest-note';
+    banner.innerHTML = day.items.map(function(i) { return '<div style="padding:4px 0">' + i + '</div>'; }).join('');
+    content.appendChild(banner);
+    if (day.stepsGoal) {
+      content.appendChild(renderStepsBlock(state.day, day.stepsGoal));
+    }
+    content.appendChild(renderTrackedBlock(state.day, '__rest_' + state.day + '__', 'Completed this day', false));
+    container.appendChild(content);
+    return;
+  }
+  if (isDayComplete(state.day, state.week)) {
+    const db = document.createElement('div');
+    db.className = 'day-complete-banner';
+    db.textContent = 'Day complete, nice work.';
+    content.appendChild(db);
+  }
+  const mobLabel = document.createElement('div');
+  mobLabel.className = 'section-label';
+  mobLabel.textContent = 'Mobility warm-up';
+  content.appendChild(mobLabel);
+  content.appendChild(renderTrackedBlock(state.day, '__mobility_' + state.day + '__', 'Completed mobility warm-up', true));
+  const cardioLabel = document.createElement('div');
+  cardioLabel.className = 'section-label';
+  cardioLabel.textContent = 'Cardio warm-up';
+  content.appendChild(cardioLabel);
+  const wu = exerciseLibrary[day.warmupId];
+  const wuCard = document.createElement('div');
+  wuCard.className = 'simple-item';
+  wuCard.textContent = wu.name + ' - ' + wu.scheme;
+  content.appendChild(wuCard);
+  content.appendChild(renderTrackedBlock(state.day, '__cardio_' + state.day + '__', 'Completed cardio warm-up', false));
+  const exLabel = document.createElement('div');
+  exLabel.className = 'section-label';
+  exLabel.textContent = 'Exercises';
+  content.appendChild(exLabel);
+  day.exerciseIds.forEach(function(exId, idx) {
+    content.appendChild(renderExerciseCard(state.day, exId, idx));
+  });
+  if (day.finisherId) {
+    const finLabel = document.createElement('div');
+    finLabel.className = 'section-label';
+    finLabel.textContent = 'Cooldown cardio';
+    content.appendChild(finLabel);
+    const fin = exerciseLibrary[day.finisherId];
+    const finCard = document.createElement('div');
+    finCard.className = 'simple-item';
+    finCard.textContent = fin.name + ' - ' + fin.scheme;
+    content.appendChild(finCard);
+    content.appendChild(renderTrackedBlock(state.day, '__finisher_' + state.day + '__', 'Completed cooldown cardio', false));
+  }
+  container.appendChild(content);
+}
+
+function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
   const row = document.createElement('div');
   row.className = 'cp-row';
   const val = (state.checkpoints[cpKey] && state.checkpoints[cpKey][fieldKey]) || '';
@@ -899,12 +875,10 @@ function deleteCheckpoint(cpKey) {
 function renderCheckpointsScreen(container) {
   const content = document.createElement('div');
   content.className = 'content';
-
   const intro = document.createElement('div');
   intro.className = 'banner';
   intro.innerHTML = '<strong>Monthly checkpoints - Cycle ' + state.cycle + ':</strong> log your numbers at start, week 4, and week 8. Take photos on your phone and keep them in your own Photos app.';
   content.appendChild(intro);
-
   const defs = [{ key: 'start', title: 'Start' }, { key: 'week4', title: 'Week 4' }, { key: 'week8', title: 'Week 8' }];
   defs.forEach(function(def) {
     const card = document.createElement('div');
@@ -924,12 +898,10 @@ function renderCheckpointsScreen(container) {
     card.appendChild(renderCheckpointField(def.key, 'waist', 'Waist', 'inches'));
     content.appendChild(card);
   });
-
   const measLabel = document.createElement('div');
   measLabel.className = 'section-label';
   measLabel.textContent = 'Measurement trend (all cycles)';
   content.appendChild(measLabel);
-
   let allPoints = [];
   (state.archivedCheckpoints || []).forEach(function(arch) {
     defs.forEach(function(def) {
@@ -939,7 +911,6 @@ function renderCheckpointsScreen(container) {
   defs.forEach(function(def) {
     allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null });
   });
-
   content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight }; }), '#e8722c'));
   content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist }; }), '#3a7ae8'));
   container.appendChild(content);
@@ -948,15 +919,13 @@ function renderCheckpointsScreen(container) {
 function renderProgressScreen(container) {
   const content = document.createElement('div');
   content.className = 'content';
-
   const intro = document.createElement('div');
   intro.className = 'banner';
   intro.innerHTML = '<strong>Exercise progress - Cycle ' + state.cycle + ':</strong> every exercise you have logged, tracked across weeks and past cycles, even if swapped out of your current plan.';
   content.appendChild(intro);
-
   const restartWrap = document.createElement('div');
   restartWrap.className = 'card';
-  restartWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Finished this 8-week cycle?</p><p class="ex-scheme" style="margin-bottom:10px;">Choose a new goal or repeat this one. All past data stays saved for these graphs.</p>';
+  restartWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Finished this cycle?</p><p class="ex-scheme" style="margin-bottom:10px;">Choose a new program length and goal. All past data stays saved for these graphs.</p>';
   const restartBtn = document.createElement('button');
   restartBtn.textContent = 'Start New Cycle';
   restartBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;';
@@ -970,14 +939,13 @@ function renderProgressScreen(container) {
       state.checkpoints = { start: {}, week4: {}, week8: {} };
       state.cycle += 1;
       state.week = 1;
-      state.screen = 'select_length';
+      state.screen = 'select_goal';
       saveState();
       render();
     }
   };
   restartWrap.appendChild(restartBtn);
   content.appendChild(restartWrap);
-
   const stepsEntries = [];
   Object.keys(state.activePlan).forEach(function(dayKey) {
     for (let c = 1; c <= state.cycle; c++) {
@@ -995,7 +963,6 @@ function renderProgressScreen(container) {
     });
     content.appendChild(buildLineChart('Daily Steps', stepPoints, '#3a7ae8'));
   }
-
   const seen = {};
   Object.keys(exerciseLibrary).forEach(function(exId) {
     const entries = getAllEntriesForExercise(exId);
@@ -1023,7 +990,6 @@ function renderProgressScreen(container) {
     card.innerHTML += chart.innerHTML;
     content.appendChild(card);
   });
-
   if (Object.keys(seen).length === 0) {
     const nd = document.createElement('div');
     nd.className = 'rest-note';
@@ -1031,32 +997,26 @@ function renderProgressScreen(container) {
     content.appendChild(nd);
   }
 
-  container.appendChild(content);
-}
+  const legalLink = document.createElement('button');
+  legalLink.textContent = 'View medical disclaimer';
+  legalLink.style.cssText = 'width:100%;padding:10px;background:none;border:none;color:#999;font-size:12px;text-decoration:underline;margin-top:16px;';
+  legalLink.onclick = function() {
+    state.disclaimerAccepted = false;
+    saveState();
+    render();
+  };
+  content.appendChild(legalLink);
 
-function migrateOldData(oldRawStr) {
-  const parsedOld = JSON.parse(oldRawStr);
-  const migratedWeights = {};
-  if (parsedOld.weights) {
-    Object.keys(parsedOld.weights).forEach(function(oldKey) {
-      const match = oldKey.match(/^(.+)::c(\d+)::w(\d+)$/);
-      if (match) {
-        migratedWeights[oldKey] = parsedOld.weights[oldKey];
-      }
-    });
-  }
-  return migratedWeights;
+  container.appendChild(content);
 }
 
 function renderDebugScreen(container) {
   const content = document.createElement('div');
   content.className = 'content';
-
   const intro = document.createElement('div');
   intro.className = 'banner';
   intro.innerHTML = '<strong>Storage check:</strong> everything saved on this phone right now.';
   content.appendChild(intro);
-
   const allKeysCard = document.createElement('div');
   allKeysCard.className = 'progress-ex-card';
   let html = '<h4>All localStorage keys on this site</h4>';
@@ -1072,22 +1032,58 @@ function renderDebugScreen(container) {
   }
   allKeysCard.innerHTML = html;
   content.appendChild(allKeysCard);
-
-  const oldV2 = localStorage.getItem('workout-state-v2');
-  if (oldV2) {
-    const card = document.createElement('div');
-    card.className = 'progress-ex-card';
-    card.innerHTML = '<h4>Previous version data found (workout-state-v2)</h4><p style="font-size:13px;">This is from before the goal-based rebuild. Weight data uses a different format and is not automatically imported, since exercises are now tracked by stable IDs rather than names.</p>';
-    content.appendChild(card);
-  }
-
   container.appendChild(content);
+}
+
+function renderDayTabs(container) {
+  const dt = document.createElement('div');
+  dt.className = 'day-tabs';
+  const keys = Object.keys(state.activePlan);
+  keys.forEach(function(key) {
+    const b = document.createElement('button');
+    b.className = 'day-tab' + (state.day === key && state.screen === 'day' ? ' active' : '');
+    b.innerHTML = state.activePlan[key].label + (isDayComplete(key, state.week) ? '<span class="tab-check">&#10003;</span>' : '');
+    b.onclick = function() { state.day = key; state.screen = 'day'; saveState(); render(); };
+    dt.appendChild(b);
+  });
+  const cb = document.createElement('button');
+  cb.className = 'day-tab' + (state.screen === 'checkpoints' ? ' active' : '');
+  cb.textContent = 'Checkpoints';
+  cb.onclick = function() { state.screen = 'checkpoints'; saveState(); render(); };
+  dt.appendChild(cb);
+  const pb = document.createElement('button');
+  pb.className = 'day-tab' + (state.screen === 'progress' ? ' active' : '');
+  pb.textContent = 'Progress';
+  pb.onclick = function() { state.screen = 'progress'; saveState(); render(); };
+  dt.appendChild(pb);
+  const db = document.createElement('button');
+  db.className = 'day-tab' + (state.screen === 'debug' ? ' active' : '');
+  db.textContent = 'Storage';
+  db.onclick = function() { state.screen = 'debug'; saveState(); render(); };
+  dt.appendChild(db);
+  container.appendChild(dt);
+}
+
+function renderWeekPicker(container) {
+  const header = document.createElement('div');
+  header.className = 'header';
+  header.innerHTML = '<h1>' + goalTemplates[state.goal].label + '</h1><div class="sub" id="week-sub"></div><div class="week-picker" id="week-picker"></div>';
+  container.appendChild(header);
+  const wp = header.querySelector('#week-picker');
+  const totalWeeks = state.programLength || 8;
+  for (let i = 1; i <= totalWeeks; i++) {
+    const b = document.createElement('button');
+    b.className = 'week-btn' + (state.week === i ? ' active' : '');
+    b.innerHTML = 'Wk ' + i + (isWeekComplete(i) ? '<span class="tab-check">&#10003;</span>' : '');
+    b.onclick = (function(i) { return function() { state.week = i; saveState(); render(); }; })(i);
+    wp.appendChild(b);
+  }
+  header.querySelector('#week-sub').textContent = 'Cycle ' + state.cycle + ' - Week ' + state.week + ' of ' + totalWeeks;
 }
 
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
-
   if (state.screen === 'select_length') {
     renderLengthSelect();
     return;
@@ -1100,10 +1096,8 @@ function render() {
     renderSubgoalSelect();
     return;
   }
-
   renderDayTabs(app);
   renderWeekPicker(app);
-
   if (state.screen === 'checkpoints') {
     renderCheckpointsScreen(app);
   } else if (state.screen === 'progress') {
