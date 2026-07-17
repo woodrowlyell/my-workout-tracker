@@ -203,7 +203,9 @@ let state = {
   checkpoints: { start: {}, week4: {}, week8: {} },
   archivedCheckpoints: [],
   goalHistory: [],
-  migratedToPerDay: false
+  migratedToPerDay: false,
+  shownDayTip: false,
+  shownWeekTip: false
 };
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -296,27 +298,6 @@ function acceptDisclaimer() {
   render();
 }
 
-function renderDisclaimer() {
-  const app = document.getElementById('app');
-  app.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'goal-screen';
-  wrap.style.textAlign = 'left';
-  wrap.innerHTML = '<h2 style="text-align:center;">Before you begin</h2>' +
-    '<div class="card" style="text-align:left;">' +
-    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px;"><strong>Consult your physician.</strong> This app provides general exercise suggestions and is not a substitute for professional medical advice. Talk to your doctor before starting this or any exercise program, especially if you have any existing health conditions, injuries, or concerns.</p>' +
-    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px;"><strong>Exercise at your own risk.</strong> Stop immediately if you feel pain, dizziness, or discomfort beyond normal exertion, and seek medical attention if needed.</p>' +
-    '<p style="font-size:14px;line-height:1.6;margin:0;"><strong>No guarantee of results.</strong> Individual results vary based on many factors outside this app control.</p>' +
-    '</div>';
-  const btn = document.createElement('button');
-  btn.className = 'goal-btn';
-  btn.style.cssText = 'text-align:center;background:#1c1c1a;color:#fff;border-color:#1c1c1a;margin-top:16px;';
-  btn.textContent = 'I Understand and Agree';
-  btn.onclick = acceptDisclaimer;
-  wrap.appendChild(btn);
-  app.appendChild(wrap);
-}
-
 function chooseGoalTop(goalKey) {
   state.selectedGoal = goalKey;
   const tmpl = goalTemplates[goalKey];
@@ -379,8 +360,8 @@ function getPrevEntry(dayKey, exId, week) {
     const e = getEntry(dayKey, exId, w);
     if (e && (e.weight || e.done)) return { week: w, entry: e };
   }
-  if (state.cycle > 1) {
-    for (let c = state.cycle - 1; c >= 1; c--) {
+  if (state.viewingCycle > 1) {
+    for (let c = state.viewingCycle - 1; c >= 1; c--) {
       for (let w = 8; w >= 1; w--) {
         const e = getEntry(dayKey, exId, w, c);
         if (e && (e.weight || e.done)) return { week: w, entry: e, cycle: c };
@@ -390,7 +371,7 @@ function getPrevEntry(dayKey, exId, week) {
   return null;
 }
 function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
-  const c = cycle !== undefined ? cycle : state.cycle;
+  const c = cycle !== undefined ? cycle : state.viewingCycle;
   let best = null;
   Object.keys(state.activePlan).forEach(function(dayKey) {
     const day = state.activePlan[dayKey];
@@ -520,6 +501,70 @@ function openSwapModal(dayKey, exIndex) {
   overlay.appendChild(sheet);
   overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
   document.body.appendChild(overlay);
+}
+
+function showTipModal(context) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-sheet';
+  sheet.style.textAlign = 'center';
+  const heading = context === 'day' ? 'Nice work finishing your first day!' : (context === 'week' ? 'One week down!' : 'Thanks for using this tracker');
+  sheet.innerHTML = '<h3>' + heading + '</h3><div class="modal-sub">If this app is helping you stay on track, a small tip is always appreciated, but never required.</div>';
+  const paypalBtn = document.createElement('a');
+  paypalBtn.href = 'https://paypal.me/WoodrowLyell';
+  paypalBtn.target = '_blank';
+  paypalBtn.className = 'goal-btn';
+  paypalBtn.style.cssText = 'text-align:center;background:#eef3fb;border-color:#b9cdf0;color:#1c3a7a;text-decoration:none;display:block;';
+  paypalBtn.textContent = 'Send a tip via PayPal';
+  sheet.appendChild(paypalBtn);
+  const venmoBtn = document.createElement('a');
+  venmoBtn.href = 'https://venmo.com/u/Woodrowlyell';
+  venmoBtn.target = '_blank';
+  venmoBtn.className = 'goal-btn';
+  venmoBtn.style.cssText = 'text-align:center;background:#eef3fb;border-color:#b9cdf0;color:#1c3a7a;text-decoration:none;display:block;';
+  venmoBtn.textContent = 'Send a tip via Venmo';
+  sheet.appendChild(venmoBtn);
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'modal-close';
+  closeBtn.textContent = 'Maybe later';
+  closeBtn.onclick = function() { document.body.removeChild(overlay); };
+  sheet.appendChild(closeBtn);
+  overlay.appendChild(sheet);
+  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+  document.body.appendChild(overlay);
+}
+
+function renderTipLink(container) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'text-align:center;margin-top:16px;';
+  const link = document.createElement('button');
+  link.textContent = 'Enjoying the app? Leave a tip';
+  link.style.cssText = 'background:none;border:none;color:#999;font-size:12px;text-decoration:underline;';
+  link.onclick = function() { showTipModal('manual'); };
+  wrap.appendChild(link);
+  container.appendChild(wrap);
+}
+
+function renderDisclaimer() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  wrap.style.textAlign = 'left';
+  wrap.innerHTML = '<h2 style="text-align:center;">Before you begin</h2>' +
+    '<div class="card" style="text-align:left;">' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px;"><strong>Consult your physician.</strong> This app provides general exercise suggestions and is not a substitute for professional medical advice. Talk to your doctor before starting this or any exercise program, especially if you have any existing health conditions, injuries, or concerns.</p>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0 0 12px;"><strong>Exercise at your own risk.</strong> Stop immediately if you feel pain, dizziness, or discomfort beyond normal exertion, and seek medical attention if needed.</p>' +
+    '<p style="font-size:14px;line-height:1.6;margin:0;"><strong>No guarantee of results.</strong> Individual results vary based on many factors outside this app control.</p>' +
+    '</div>';
+  const btn = document.createElement('button');
+  btn.className = 'goal-btn';
+  btn.style.cssText = 'text-align:center;background:#1c1c1a;color:#fff;border-color:#1c1c1a;margin-top:16px;';
+  btn.textContent = 'I Understand and Agree';
+  btn.onclick = acceptDisclaimer;
+  wrap.appendChild(btn);
+  app.appendChild(wrap);
 }
 
 function renderGoalSelect() {
@@ -769,6 +814,15 @@ function renderDayContent(container) {
     db.className = 'day-complete-banner';
     db.textContent = 'Day complete, nice work.';
     content.appendChild(db);
+    if (!state.shownDayTip) {
+      state.shownDayTip = true;
+      saveState();
+      setTimeout(function() { showTipModal('day'); }, 400);
+    } else if (!state.shownWeekTip && isWeekComplete(state.week)) {
+      state.shownWeekTip = true;
+      saveState();
+      setTimeout(function() { showTipModal('week'); }, 400);
+    }
   }
   const mobLabel = document.createElement('div');
   mobLabel.className = 'section-label';
@@ -998,7 +1052,6 @@ function renderProgressScreen(container) {
     nd.textContent = 'No weighted exercises logged yet.';
     content.appendChild(nd);
   }
-
   const legalLink = document.createElement('button');
   legalLink.textContent = 'View medical disclaimer';
   legalLink.style.cssText = 'width:100%;padding:10px;background:none;border:none;color:#999;font-size:12px;text-decoration:underline;margin-top:16px;';
@@ -1008,7 +1061,7 @@ function renderProgressScreen(container) {
     render();
   };
   content.appendChild(legalLink);
-
+  renderTipLink(content);
   container.appendChild(content);
 }
 
@@ -1019,7 +1072,6 @@ function renderDebugScreen(container) {
   intro.className = 'banner';
   intro.innerHTML = '<strong>Storage check:</strong> everything saved on this phone right now.';
   content.appendChild(intro);
-
   const summaryCard = document.createElement('div');
   summaryCard.className = 'progress-ex-card';
   let summaryHtml = '<h4>Current app state</h4>';
@@ -1028,10 +1080,8 @@ function renderDebugScreen(container) {
   summaryHtml += '<div style="font-size:13px;padding:4px 0;">Goal: <strong>' + (state.goal || 'none set') + '</strong></div>';
   summaryHtml += '<div style="font-size:13px;padding:4px 0;">Program length: <strong>' + (state.programLength || 'none') + '</strong></div>';
   summaryHtml += '<div style="font-size:13px;padding:4px 0;">Total weight entries stored: <strong>' + Object.keys(state.weights).length + '</strong></div>';
-  summaryCard.innerHTml = summaryHtml;
   summaryCard.innerHTML = summaryHtml;
   content.appendChild(summaryCard);
-
   const entriesCard = document.createElement('div');
   entriesCard.className = 'progress-ex-card';
   let entriesHtml = '<h4>All logged weight entries</h4>';
@@ -1046,7 +1096,6 @@ function renderDebugScreen(container) {
   }
   entriesCard.innerHTML = entriesHtml;
   content.appendChild(entriesCard);
-
   const allKeysCard = document.createElement('div');
   allKeysCard.className = 'progress-ex-card';
   let html = '<h4>All localStorage keys on this site</h4>';
@@ -1107,7 +1156,6 @@ function renderWeekPicker(container) {
   }
   header.innerHTML = '<h1>' + goalTemplates[state.goal].label + '</h1><div class="sub" id="week-sub"></div>' + cycleSelectHtml + '<div class="week-picker" id="week-picker"></div>';
   container.appendChild(header);
-
   if (cycleOptions.length > 1) {
     const sel = header.querySelector('#cycle-select');
     sel.onchange = function() {
@@ -1117,7 +1165,6 @@ function renderWeekPicker(container) {
       render();
     };
   }
-
   const wp = header.querySelector('#week-picker');
   const totalWeeks = state.programLength || 8;
   for (let i = 1; i <= totalWeeks; i++) {
@@ -1129,7 +1176,6 @@ function renderWeekPicker(container) {
   }
   const viewingLabel = state.viewingCycle !== state.cycle ? ' - viewing past cycle' : '';
   header.querySelector('#week-sub').textContent = 'Cycle ' + state.viewingCycle + ' - Week ' + state.week + ' of ' + totalWeeks + viewingLabel;
-
   if (state.viewingCycle !== state.cycle) {
     const backBtn = document.createElement('button');
     backBtn.textContent = 'Return to current cycle';
@@ -1147,8 +1193,8 @@ function renderWeekPicker(container) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
-  if (state.screen === 'select_length') {
-    renderLengthSelect();
+  if (!state.disclaimerAccepted) {
+    renderDisclaimer();
     return;
   }
   if (state.screen === 'select_goal') {
@@ -1157,6 +1203,10 @@ function render() {
   }
   if (state.screen === 'select_subgoal') {
     renderSubgoalSelect();
+    return;
+  }
+  if (state.screen === 'select_length') {
+    renderLengthSelect();
     return;
   }
   renderDayTabs(app);
