@@ -561,8 +561,16 @@ function checkAndCelebrate(dayKey, week) {
     state.celebratedWeeks.push(weekCelebrationKey);
     const totalWeeksForAdvance = state.programLength || 8;
     if (week < totalWeeksForAdvance) { state.week = week + 1; }
+    const shouldShowTip = !state.shownWeekTip;
+    if (shouldShowTip) state.shownWeekTip = true;
     saveState();
-    setTimeout(function() { showEncouragementModal('week'); render(); }, 350);
+    setTimeout(function() {
+      showEncouragementModal('week');
+      if (shouldShowTip) {
+        setTimeout(function() { showTipModal('week'); }, 900);
+      }
+      render();
+    }, 350);
     return;
   }
   const totalWeeks = state.programLength || 8;
@@ -907,10 +915,6 @@ function renderDayContent(container) {
       state.shownDayTip = true;
       saveState();
       setTimeout(function() { showTipModal('day'); }, 1400);
-    } else if (!state.shownWeekTip && isWeekComplete(state.week)) {
-      state.shownWeekTip = true;
-      saveState();
-      setTimeout(function() { showTipModal('week'); }, 1400);
     }
   }
   const mobLabel = document.createElement('div');
@@ -1232,12 +1236,20 @@ function renderDayTabs(container) {
   const cb = document.createElement('button');
   cb.className = 'day-tab' + (state.screen === 'checkpoints' ? ' active' : '');
   cb.textContent = 'Checkpoints';
-  cb.onclick = function() { state.screen = 'checkpoints'; saveState(); render(); };
+  cb.onclick = function() {
+    state.screen = state.screen === 'checkpoints' ? 'day' : 'checkpoints';
+    saveState();
+    render();
+  };
   dt.appendChild(cb);
   const pb = document.createElement('button');
   pb.className = 'day-tab' + (state.screen === 'progress' ? ' active' : '');
   pb.textContent = 'Progress';
-  pb.onclick = function() { state.screen = 'progress'; saveState(); render(); };
+  pb.onclick = function() {
+    state.screen = state.screen === 'progress' ? 'day' : 'progress';
+    saveState();
+    render();
+  };
   dt.appendChild(pb);
   container.appendChild(dt);
 }
