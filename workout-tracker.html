@@ -266,11 +266,11 @@ let state = {
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 
-function formatDateDMY(isoDateStr) {
+function formatDateMDY(isoDateStr) {
   if (!isoDateStr) return '';
   const parts = isoDateStr.split('-');
   if (parts.length !== 3) return isoDateStr;
-  return parts[2] + '-' + parts[1] + '-' + parts[0];
+  return parts[1] + '-' + parts[2] + '-' + parts[0];
 }
 
 function getMondayOfWeek(startDateStr, weekNumber) {
@@ -1210,8 +1210,11 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
     if (!state.checkpoints[cpKey]) state.checkpoints[cpKey] = {};
     const hadDataBefore = !!(state.checkpoints[cpKey].weight || state.checkpoints[cpKey].waist || state.checkpoints[cpKey].hips);
     state.checkpoints[cpKey][fieldKey] = input.value;
-    if (!hadDataBefore && input.value) {
+    const hasDataNow = !!(state.checkpoints[cpKey].weight || state.checkpoints[cpKey].waist || state.checkpoints[cpKey].hips);
+    if (!hadDataBefore && hasDataNow) {
       state.checkpoints[cpKey].dateEntered = todayStr();
+    } else if (!hasDataNow) {
+      delete state.checkpoints[cpKey].dateEntered;
     }
     saveState();
     render();
@@ -1294,23 +1297,41 @@ function renderCheckpointsScreen(container) {
     };
     backfillCard.appendChild(setDateBtn);
     content.appendChild(backfillCard);
+  } else {
+    const confirmedWrap = document.createElement('div');
+    confirmedWrap.style.cssText = 'margin-bottom:14px;';
+    const confirmedCard = document.createElement('div');
+    confirmedCard.style.cssText = 'font-size:13px;color:#1c1c1a;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+    confirmedCard.innerHTML = '<span>Cycle start date: ' + formatDateMDY(state.cycleStartDate) + '</span>';
+    const editInput = document.createElement('input');
+    editInput.type = 'date';
+    editInput.value = state.cycleStartDate;
+    editInput.style.cssText = 'padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;';
+    editInput.onchange = function() {
+      if (editInput.value) { state.cycleStartDate = editInput.value; saveState(); render(); }
+    };
+    confirmedCard.appendChild(editInput);
+    confirmedWrap.appendChild(confirmedCard);
+    content.appendChild(confirmedWrap);
   }
-  const defs = [{ key: 'start', title: 'Start' }, { key: 'week4', title: 'Week 4' }, { key: 'week8', title: 'Week 8' }];
+  const finalWeekNum = state.programLength || 8;
+  const defs = [
+    { key: 'start', title: 'Start', targetWeek: 1 },
+    { key: 'week4', title: 'Week 4', targetWeek: 4 },
+    { key: 'week8', title: 'Week ' + finalWeekNum, targetWeek: finalWeekNum }
+  ];
   defs.forEach(function(def) {
     const card = document.createElement('div');
     card.className = 'checkpoint-card';
     const h = document.createElement('h3');
     const hasData = state.checkpoints[def.key] && (state.checkpoints[def.key].weight || state.checkpoints[def.key].waist || state.checkpoints[def.key].hips);
-    let rawDate = '';
-    if (def.key === 'start' && state.checkpoints.start && state.checkpoints.start.dateEntered) {
-      rawDate = state.checkpoints.start.dateEntered;
-    } else if (def.key === 'week4' && state.cycleStartDate) {
-      rawDate = getMondayOfWeek(state.cycleStartDate, 4);
-    } else if (def.key === 'week8' && state.cycleStartDate) {
-      rawDate = getMondayOfWeek(state.cycleStartDate, Math.min(8, state.programLength || 8));
+    let dateLabel = '';
+    if (hasData && state.checkpoints[def.key].dateEntered) {
+      dateLabel = ' <span style="color:#1c1c1a;font-weight:600;">(' + formatDateMDY(state.checkpoints[def.key].dateEntered) + ')</span>';
+    } else if (state.cycleStartDate) {
+      const targetDate = getMondayOfWeek(state.cycleStartDate, def.targetWeek);
+      dateLabel = ' <span style="color:#b31942;font-weight:600;">(' + formatDateMDY(targetDate) + ')</span>';
     }
-    const dateColor = hasData ? '#1c1c1a' : '#b31942';
-    const dateLabel = rawDate ? (' <span style="color:' + dateColor + ';font-weight:600;">(' + formatDateDMY(rawDate) + ')</span>') : '';
     h.innerHTML = '<span>' + def.title + dateLabel + '</span>';
     if (hasData) {
       const delBtn = document.createElement('button');
