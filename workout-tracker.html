@@ -116,6 +116,11 @@ const exerciseLibrary = {
   cable_woodchop: { name: 'Cable wood chop', muscle: 'core', scheme: '3 x 12 each side', link: YT('cable wood chop proper form') },
   ab_crunch_machine: { name: 'Abdominal crunch machine', muscle: 'core', scheme: '3 x 15', link: YT('abdominal crunch machine proper form') },
   farmer_carry: { name: 'Farmer carry', muscle: 'core', scheme: '3 x 45 sec', link: YT('farmer carry proper form'), noWeight: true },
+  smith_hip_thrust: { name: 'Smith machine hip thrust', muscle: 'legs_posterior', scheme: '4 x 12', link: YT('smith machine hip thrust proper form') },
+  hip_abductor: { name: 'Hip abductor machine', muscle: 'legs_posterior', scheme: '3 x 15', link: YT('hip abductor machine proper form') },
+  hip_adductor: { name: 'Hip adductor machine', muscle: 'legs_posterior', scheme: '3 x 15', link: YT('hip adductor machine proper form') },
+  rear_delt_pec_deck: { name: 'Rear delt / pec deck machine', muscle: 'shoulders', scheme: '3 x 12', link: YT('rear delt pec deck machine form') },
+  torso_rotation: { name: 'Torso rotation machine', muscle: 'core', scheme: '3 x 15', link: YT('torso rotation machine proper form') },
   treadmill: { name: 'Treadmill', muscle: 'cardio', scheme: '5 min', link: null, noWeight: true },
   bike: { name: 'Bike', muscle: 'cardio', scheme: '5 min', link: null, noWeight: true },
   incline_walk: { name: 'Incline walk', muscle: 'cardio', scheme: '10 min', link: null, noWeight: true },
@@ -151,6 +156,11 @@ const mobility = {
 };
 
 const goalTemplates = {
+  glute_and_strength: {
+    label: 'Glute & Strength Focus',
+    desc: 'Lower body A/B split with upper body and full body days, priority on hip thrust progression',
+    subgoals: null
+  },
   yoga: {
     label: 'Yoga',
     desc: 'A calming, flexibility-focused flow with guided how-to videos for every pose',
@@ -176,6 +186,9 @@ const goalTemplates = {
 };
 
 const programLibrary = {
+  '4_glute_and_strength': { days: { mon: { label: 'Mon Lower A', warmupId: 'treadmill', exerciseIds: ['leg_press', 'smith_hip_thrust', 'hip_abductor'], finisherId: 'incline_walk', priorityIds: ['smith_hip_thrust'] }, tue: { label: 'Tue Upper', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'shoulder_press_machine', 'triceps_pushdown'], finisherId: null }, wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: glutes'], stepsGoal: '10,000+' }, thu: { label: 'Thu Lower B', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'seated_leg_curl', 'hip_adductor'], finisherId: null }, fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'leg_press', 'smith_hip_thrust', 'ab_crunch_machine'], finisherId: 'incline_walk', priorityIds: ['smith_hip_thrust'] }, sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk, OR 20-minute bike'], stepsGoal: '8,000-10,000' }, sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Walk if desired'] } } },
+  '8_glute_and_strength': { days: { mon: { label: 'Mon Lower A', warmupId: 'treadmill', exerciseIds: ['leg_press', 'smith_hip_thrust', 'leg_extension', 'hip_abductor', 'hip_adductor'], finisherId: 'incline_walk', priorityIds: ['smith_hip_thrust'] }, tue: { label: 'Tue Upper', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'seated_cable_row', 'shoulder_press_machine', 'triceps_pushdown', 'rear_delt_pec_deck', 'ab_crunch_machine'], finisherId: null }, wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: hip flexors', 'Stretch: chest', 'Stretch: glutes'], stepsGoal: '10,000+' }, thu: { label: 'Thu Lower B', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'seated_leg_curl', 'hip_abductor', 'hip_adductor', 'calf_raise_machine'], finisherId: null }, fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'leg_press', 'smith_hip_thrust', 'shoulder_press_machine', 'torso_rotation', 'ab_crunch_machine'], finisherId: 'incline_walk', priorityIds: ['smith_hip_thrust'] }, sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR 30-minute bike'], stepsGoal: '10,000-12,000' }, sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Walk if desired'] } } },
+  '12_glute_and_strength': { days: { mon: { label: 'Mon Lower A', warmupId: 'treadmill', exerciseIds: ['leg_press', 'smith_hip_thrust', 'leg_extension', 'hip_abductor', 'hip_adductor', 'calf_raise_machine'], finisherId: 'incline_walk', priorityIds: ['smith_hip_thrust'] }, tue: { label: 'Tue Upper', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'seated_cable_row', 'shoulder_press_machine', 'triceps_pushdown', 'rear_delt_pec_deck', 'ab_crunch_machine'], finisherId: null }, wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: hip flexors', 'Stretch: chest', 'Stretch: glutes'], stepsGoal: '10,000+' }, thu: { label: 'Thu Lower B', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'seated_leg_curl', 'hip_abductor', 'hip_adductor', 'calf_raise_machine'], finisherId: null }, fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'lat_pulldown', 'leg_press', 'smith_hip_thrust', 'shoulder_press_machine', 'torso_rotation', 'ab_crunch_machine'], finisherId: 'incline_walk', priorityIds: ['smith_hip_thrust'] }, sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR 30-minute bike'], stepsGoal: '10,000-12,000' }, sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Walk if desired'] } } },
   '4_yoga': { days: { mon: { label: 'Mon Gentle Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_child_pose', 'yoga_downward_dog', 'yoga_cobra'], finisherId: null }, tue: { label: 'Tue Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, wed: { label: 'Wed Balance Flow', warmupId: 'treadmill', exerciseIds: ['yoga_tree_pose', 'yoga_warrior_1', 'yoga_triangle'], finisherId: null }, thu: { label: 'Thu Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, fri: { label: 'Fri Full Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_downward_dog', 'yoga_warrior_2', 'yoga_bridge', 'yoga_savasana'], finisherId: null }, sat: { label: 'Sat Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, sun: { label: 'Sun Restorative', warmupId: 'treadmill', exerciseIds: ['yoga_seated_forward_fold', 'yoga_pigeon', 'yoga_savasana'], finisherId: null } } },
   '8_yoga': { days: { mon: { label: 'Mon Gentle Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_child_pose', 'yoga_downward_dog', 'yoga_cobra', 'yoga_bridge'], finisherId: null }, tue: { label: 'Tue Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, wed: { label: 'Wed Balance Flow', warmupId: 'treadmill', exerciseIds: ['yoga_tree_pose', 'yoga_warrior_1', 'yoga_warrior_2', 'yoga_triangle'], finisherId: null }, thu: { label: 'Thu Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, fri: { label: 'Fri Full Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_downward_dog', 'yoga_warrior_2', 'yoga_bridge', 'yoga_pigeon', 'yoga_savasana'], finisherId: null }, sat: { label: 'Sat Active Rest', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' }, sun: { label: 'Sun Restorative', warmupId: 'treadmill', exerciseIds: ['yoga_seated_forward_fold', 'yoga_pigeon', 'yoga_child_pose', 'yoga_savasana'], finisherId: null } } },
   '12_yoga': { days: { mon: { label: 'Mon Gentle Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_child_pose', 'yoga_downward_dog', 'yoga_cobra', 'yoga_bridge', 'yoga_savasana'], finisherId: null }, tue: { label: 'Tue Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, wed: { label: 'Wed Balance Flow', warmupId: 'treadmill', exerciseIds: ['yoga_tree_pose', 'yoga_warrior_1', 'yoga_warrior_2', 'yoga_triangle', 'yoga_savasana'], finisherId: null }, thu: { label: 'Thu Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, fri: { label: 'Fri Full Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_downward_dog', 'yoga_warrior_2', 'yoga_bridge', 'yoga_pigeon', 'yoga_savasana'], finisherId: null }, sat: { label: 'Sat Active Rest', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' }, sun: { label: 'Sun Restorative', warmupId: 'treadmill', exerciseIds: ['yoga_seated_forward_fold', 'yoga_pigeon', 'yoga_child_pose', 'yoga_triangle', 'yoga_savasana'], finisherId: null } } },
@@ -247,10 +260,22 @@ let state = {
   checkinAcks: [],
   proteinGoal: null,
   proteinPromptShown: false,
-  proteinEntries: {}
+  proteinEntries: {},
+  cycleStartDate: null
 };
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+function getMondayOfWeek(startDateStr, weekNumber) {
+  const startDate = new Date(startDateStr + 'T00:00:00');
+  const dayOfWeek = startDate.getDay();
+  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const firstMonday = new Date(startDate);
+  firstMonday.setDate(startDate.getDate() - daysToSubtract);
+  const targetMonday = new Date(firstMonday);
+  targetMonday.setDate(firstMonday.getDate() + (weekNumber - 1) * 7);
+  return targetMonday.toISOString().split('T')[0];
+}
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -395,6 +420,7 @@ function finalizeProgram(goalKey, subgoalKey) {
   state.selectedSubgoal = subgoalKey;
   state.activePlan = JSON.parse(JSON.stringify(program.days));
   state.programLength = state.selectedLength;
+  state.cycleStartDate = todayStr();
   state.screen = 'day';
   state.week = 1;
   saveState();
@@ -562,12 +588,12 @@ function openSwapModal(dayKey, exIndex) {
   const currentExId = day.exerciseIds[exIndex];
   const muscle = exerciseLibrary[currentExId].muscle;
   const alreadyInDay = day.exerciseIds.filter(function(id, idx) { return idx !== exIndex; });
-  const options = (substituteGroups[muscle] || []).filter(function(id) { return id !== currentExId && alreadyInDay.indexOf(id) === -1; });
+  const options = (substituteGroups[muscle] || []).filter(function(id) { return id !== currentExId && alreadyInDay.indexOf(id) === -1; }).slice(0, 5);
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
-  sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">Choose a replacement that works the same muscle group. Exercises already in today plan are hidden.</div>';
+  sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">Choose a replacement that works the same muscle group. Exercises already in today plan are hidden. Showing up to 5 options.</div>';
   if (options.length === 0) {
     const nd = document.createElement('p');
     nd.style.cssText = 'font-size:13px;color:#999;';
@@ -577,10 +603,22 @@ function openSwapModal(dayKey, exIndex) {
   options.forEach(function(optId) {
     const opt = document.createElement('div');
     opt.className = 'swap-option';
+    opt.style.cssText = 'flex-direction:column;align-items:stretch;';
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
     const optName = document.createElement('div');
     optName.className = 'swap-option-name';
     optName.textContent = exerciseLibrary[optId].name;
-    opt.appendChild(optName);
+    topRow.appendChild(optName);
+    if (exerciseLibrary[optId].link) {
+      const howToLink = document.createElement('a');
+      howToLink.href = exerciseLibrary[optId].link;
+      howToLink.target = '_blank';
+      howToLink.className = 'ex-btn';
+      howToLink.textContent = 'How-to';
+      topRow.appendChild(howToLink);
+    }
+    opt.appendChild(topRow);
     const btns = document.createElement('div');
     btns.className = 'swap-btns';
     const todayBtn = document.createElement('button');
@@ -855,12 +893,15 @@ function linkIcon() {
 
 function renderExerciseCard(dayKey, exId, exIndex) {
   const ex = exerciseLibrary[exId];
+  const day = state.activePlan[dayKey];
+  const isPriority = day.priorityIds && day.priorityIds.indexOf(exId) !== -1;
   const card = document.createElement('div');
   card.className = 'card';
+  if (isPriority) { card.style.cssText = 'border: 2px solid #c2427a; background: #fff9fa;'; }
   const top = document.createElement('div');
   top.className = 'ex-top';
   const left = document.createElement('div');
-  left.innerHTML = '<p class="ex-name">' + ex.name + '</p><p class="ex-scheme">' + ex.scheme + '</p>';
+  left.innerHTML = '<p class="ex-name">' + (isPriority ? '\u2b50 ' : '') + ex.name + '</p><p class="ex-scheme">' + ex.scheme + '</p>';
   top.appendChild(left);
   const actions = document.createElement('div');
   actions.className = 'ex-actions';
@@ -880,6 +921,12 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   actions.appendChild(swapBtn);
   top.appendChild(actions);
   card.appendChild(top);
+  if (isPriority) {
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:12px;color:#a11c56;background:#fbe9f0;border-radius:6px;padding:4px 8px;margin-top:6px;display:inline-block;';
+    note.textContent = 'Priority lift: pause 2 seconds at the top, squeeze glutes';
+    card.appendChild(note);
+  }
   if (ex.noWeight) {
     const entry = getEntry(dayKey, exId, state.week) || {};
     const row = document.createElement('div');
@@ -1032,6 +1079,11 @@ function renderDayContent(container) {
     content.appendChild(banner);
     content.appendChild(renderStepsBlock(state.day, day.stepsGoal || null));
     content.appendChild(renderTrackedBlock(state.day, '__rest_' + state.day + '__', 'Completed this day', false));
+    const swapDayBtnRest = document.createElement('button');
+    swapDayBtnRest.textContent = 'Swap this day with another day';
+    swapDayBtnRest.style.cssText = 'width:100%;padding:10px;background:#eef3fb;border:1px solid #b9cdf0;color:#1c3a7a;border-radius:10px;font-size:13px;font-weight:600;margin-top:10px;';
+    swapDayBtnRest.onclick = function() { openDaySwapModal(state.day); };
+    content.appendChild(swapDayBtnRest);
     container.appendChild(content);
     return;
   }
@@ -1100,8 +1152,13 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
   const input = row.querySelector('input');
   input.addEventListener('change', function() {
     if (!state.checkpoints[cpKey]) state.checkpoints[cpKey] = {};
+    const hadDataBefore = !!(state.checkpoints[cpKey].weight || state.checkpoints[cpKey].waist);
     state.checkpoints[cpKey][fieldKey] = input.value;
+    if (!hadDataBefore && input.value) {
+      state.checkpoints[cpKey].dateEntered = todayStr();
+    }
     saveState();
+    render();
   });
   return row;
 }
@@ -1167,7 +1224,15 @@ function renderCheckpointsScreen(container) {
     card.className = 'checkpoint-card';
     const h = document.createElement('h3');
     const hasData = state.checkpoints[def.key] && (state.checkpoints[def.key].weight || state.checkpoints[def.key].waist);
-    h.innerHTML = '<span>' + def.title + '</span>';
+    let dateLabel = '';
+    if (def.key === 'start' && state.checkpoints.start && state.checkpoints.start.dateEntered) {
+      dateLabel = ' (' + state.checkpoints.start.dateEntered + ')';
+    } else if (def.key === 'week4' && state.cycleStartDate) {
+      dateLabel = ' (' + getMondayOfWeek(state.cycleStartDate, 4) + ')';
+    } else if (def.key === 'week8' && state.cycleStartDate) {
+      dateLabel = ' (' + getMondayOfWeek(state.cycleStartDate, Math.min(8, state.programLength || 8)) + ')';
+    }
+    h.innerHTML = '<span>' + def.title + dateLabel + '</span>';
     if (hasData) {
       const delBtn = document.createElement('button');
       delBtn.className = 'cp-delete-btn';
