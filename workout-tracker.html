@@ -266,6 +266,13 @@ let state = {
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 
+function formatDateDMY(isoDateStr) {
+  if (!isoDateStr) return '';
+  const parts = isoDateStr.split('-');
+  if (parts.length !== 3) return isoDateStr;
+  return parts[2] + '-' + parts[1] + '-' + parts[0];
+}
+
 function getMondayOfWeek(startDateStr, weekNumber) {
   const startDate = new Date(startDateStr + 'T00:00:00');
   const dayOfWeek = startDate.getDay();
@@ -416,6 +423,7 @@ function chooseLength(len) {
 function finalizeProgram(goalKey, subgoalKey) {
   if (!isProgramAvailable(state.selectedLength, goalKey, subgoalKey)) { toast('That combination is not ready yet'); return; }
   const program = getProgram(state.selectedLength, goalKey, subgoalKey);
+  const isNewCycleTransition = state.cycle > 1 && state.activePlan;
   state.goal = goalKey;
   state.selectedSubgoal = subgoalKey;
   state.activePlan = JSON.parse(JSON.stringify(program.days));
@@ -424,6 +432,9 @@ function finalizeProgram(goalKey, subgoalKey) {
   state.screen = 'day';
   state.week = 1;
   saveState();
+  if (isNewCycleTransition) {
+    setTimeout(function() { showFireworksCelebration('New program locked in! Time to crush your next cycle.'); }, 300);
+  }
   render();
 }
 
@@ -655,7 +666,7 @@ function openDaySwapModal(sourceDayKey) {
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
-  sheet.innerHTML = '<h3>Swap ' + state.activePlan[sourceDayKey].label + '</h3><div class="modal-sub">Choose which day to swap this workout with</div>';
+  sheet.innerHTML = '<h3>Swap ' + state.activePlan[sourceDayKey].label + '</h3><div class="modal-sub">The workout content will move to the other day, but the day names stay in order</div>';
   Object.keys(state.activePlan).forEach(function(otherKey) {
     if (otherKey === sourceDayKey) return;
     const opt = document.createElement('div');
@@ -668,11 +679,16 @@ function openDaySwapModal(sourceDayKey) {
     swapBtn.className = 'swap-btn permanent';
     swapBtn.textContent = 'Swap';
     swapBtn.onclick = function() {
-      const temp = state.activePlan[sourceDayKey];
-      state.activePlan[sourceDayKey] = state.activePlan[otherKey];
-      state.activePlan[otherKey] = temp;
+      const sourceLabel = state.activePlan[sourceDayKey].label;
+      const otherLabel = state.activePlan[otherKey].label;
+      const sourceContent = Object.assign({}, state.activePlan[sourceDayKey]);
+      const otherContent = Object.assign({}, state.activePlan[otherKey]);
+      sourceContent.label = sourceLabel;
+      otherContent.label = otherLabel;
+      state.activePlan[sourceDayKey] = otherContent;
+      state.activePlan[otherKey] = sourceContent;
       state.day = otherKey;
-      saveState(); document.body.removeChild(overlay); render(); toast('Days swapped');
+      saveState(); document.body.removeChild(overlay); render(); toast('Workouts swapped');
     };
     opt.appendChild(swapBtn);
     sheet.appendChild(opt);
@@ -716,12 +732,52 @@ function showEncouragementModal(context) {
   document.body.appendChild(overlay);
 }
 
+function showFireworksCelebration(message) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+
+  const colors = ['#e8722c', '#3a7ae8', '#4caf50', '#c2427a', '#ffd700', '#ff5252'];
+  for (let i = 0; i < 40; i++) {
+    const spark = document.createElement('div');
+    const angle = Math.random() * 360;
+    const distance = 80 + Math.random() * 180;
+    const dx = Math.cos(angle * Math.PI / 180) * distance;
+    const dy = Math.sin(angle * Math.PI / 180) * distance;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const delay = Math.random() * 0.6;
+    spark.style.cssText = 'position:absolute;top:50%;left:50%;width:6px;height:6px;border-radius:50%;background:' + color + ';opacity:0;animation:fw-burst 1.4s ease-out ' + delay + 's infinite;';
+    spark.style.setProperty('--dx', dx + 'px');
+    spark.style.setProperty('--dy', dy + 'px');
+    overlay.appendChild(spark);
+  }
+
+  const styleTag = document.createElement('style');
+  styleTag.textContent = '@keyframes fw-burst { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }';
+  overlay.appendChild(styleTag);
+
+  const card = document.createElement('div');
+  card.style.cssText = 'background:#fff;border-radius:20px;padding:32px 24px;text-align:center;max-width:340px;position:relative;z-index:2;box-shadow:0 20px 60px rgba(0,0,0,0.4);';
+  card.innerHTML = '<div style="font-size:48px;margin-bottom:10px;">\uD83C\uDF89</div><h2 style="font-size:22px;margin:0 0 10px;">' + message + '</h2>';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Continue';
+  closeBtn.style.cssText = 'padding:14px 28px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;margin-top:8px;';
+  closeBtn.onclick = function() { document.body.removeChild(overlay); };
+  card.appendChild(closeBtn);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+}
+
 function checkAndCelebrate(dayKey, week) {
   const dayCelebrationKey = 'c' + state.cycle + '-w' + week + '-' + dayKey;
   if (isDayComplete(dayKey, week) && state.celebratedDays.indexOf(dayCelebrationKey) === -1) {
     state.celebratedDays.push(dayCelebrationKey);
+    const dayKeys = Object.keys(state.activePlan);
+    const currentIndex = dayKeys.indexOf(dayKey);
+    if (currentIndex !== -1 && currentIndex < dayKeys.length - 1) {
+      state.day = dayKeys[currentIndex + 1];
+    }
     saveState();
-    setTimeout(function() { showEncouragementModal('day'); }, 350);
+    setTimeout(function() { showEncouragementModal('day'); render(); }, 350);
     return;
   }
   const weekCelebrationKey = 'c' + state.cycle + '-w' + week;
@@ -748,7 +804,7 @@ function checkAndCelebrate(dayKey, week) {
   if (allWeeksDone && state.celebratedCycles.indexOf(cycleCelebrationKey) === -1) {
     state.celebratedCycles.push(cycleCelebrationKey);
     saveState();
-    setTimeout(function() { showEncouragementModal('cycle'); }, 350);
+    setTimeout(function() { showFireworksCelebration('You completed the whole program! Time to start your next cycle.'); }, 350);
   }
 }
 
@@ -1152,7 +1208,7 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
   const input = row.querySelector('input');
   input.addEventListener('change', function() {
     if (!state.checkpoints[cpKey]) state.checkpoints[cpKey] = {};
-    const hadDataBefore = !!(state.checkpoints[cpKey].weight || state.checkpoints[cpKey].waist);
+    const hadDataBefore = !!(state.checkpoints[cpKey].weight || state.checkpoints[cpKey].waist || state.checkpoints[cpKey].hips);
     state.checkpoints[cpKey][fieldKey] = input.value;
     if (!hadDataBefore && input.value) {
       state.checkpoints[cpKey].dateEntered = todayStr();
@@ -1218,20 +1274,43 @@ function renderCheckpointsScreen(container) {
   intro.className = 'banner';
   intro.innerHTML = '<strong>Monthly checkpoints - Cycle ' + state.cycle + ':</strong> log your numbers at start, week 4, and week 8. Take photos on your phone and keep them in your own Photos app.';
   content.appendChild(intro);
+
+  if (!state.cycleStartDate) {
+    const backfillCard = document.createElement('div');
+    backfillCard.className = 'card';
+    backfillCard.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Set this cycle\u2019s start date</p><p class="ex-scheme" style="margin-bottom:10px;">This cycle started before dates were tracked. Set the date you began this cycle so Week 4 and Week 8 dates can be calculated.</p>';
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.style.cssText = 'width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:10px;';
+    backfillCard.appendChild(dateInput);
+    const setDateBtn = document.createElement('button');
+    setDateBtn.textContent = 'Set Start Date';
+    setDateBtn.style.cssText = 'width:100%;padding:10px;background:#1c1c1a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;';
+    setDateBtn.onclick = function() {
+      if (!dateInput.value) { toast('Pick a date first'); return; }
+      state.cycleStartDate = dateInput.value;
+      saveState();
+      render();
+    };
+    backfillCard.appendChild(setDateBtn);
+    content.appendChild(backfillCard);
+  }
   const defs = [{ key: 'start', title: 'Start' }, { key: 'week4', title: 'Week 4' }, { key: 'week8', title: 'Week 8' }];
   defs.forEach(function(def) {
     const card = document.createElement('div');
     card.className = 'checkpoint-card';
     const h = document.createElement('h3');
-    const hasData = state.checkpoints[def.key] && (state.checkpoints[def.key].weight || state.checkpoints[def.key].waist);
-    let dateLabel = '';
+    const hasData = state.checkpoints[def.key] && (state.checkpoints[def.key].weight || state.checkpoints[def.key].waist || state.checkpoints[def.key].hips);
+    let rawDate = '';
     if (def.key === 'start' && state.checkpoints.start && state.checkpoints.start.dateEntered) {
-      dateLabel = ' (' + state.checkpoints.start.dateEntered + ')';
+      rawDate = state.checkpoints.start.dateEntered;
     } else if (def.key === 'week4' && state.cycleStartDate) {
-      dateLabel = ' (' + getMondayOfWeek(state.cycleStartDate, 4) + ')';
+      rawDate = getMondayOfWeek(state.cycleStartDate, 4);
     } else if (def.key === 'week8' && state.cycleStartDate) {
-      dateLabel = ' (' + getMondayOfWeek(state.cycleStartDate, Math.min(8, state.programLength || 8)) + ')';
+      rawDate = getMondayOfWeek(state.cycleStartDate, Math.min(8, state.programLength || 8));
     }
+    const dateColor = hasData ? '#1c1c1a' : '#b31942';
+    const dateLabel = rawDate ? (' <span style="color:' + dateColor + ';font-weight:600;">(' + formatDateDMY(rawDate) + ')</span>') : '';
     h.innerHTML = '<span>' + def.title + dateLabel + '</span>';
     if (hasData) {
       const delBtn = document.createElement('button');
@@ -1243,6 +1322,7 @@ function renderCheckpointsScreen(container) {
     card.appendChild(h);
     card.appendChild(renderCheckpointField(def.key, 'weight', 'Weight', 'lbs'));
     card.appendChild(renderCheckpointField(def.key, 'waist', 'Waist', 'inches'));
+    card.appendChild(renderCheckpointField(def.key, 'hips', 'Hips', 'inches'));
     content.appendChild(card);
   });
   const measLabel = document.createElement('div');
@@ -1252,14 +1332,15 @@ function renderCheckpointsScreen(container) {
   let allPoints = [];
   (state.archivedCheckpoints || []).forEach(function(arch) {
     defs.forEach(function(def) {
-      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null });
+      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null, hips: parseFloat(arch[def.key] && arch[def.key].hips) || null });
     });
   });
   defs.forEach(function(def) {
-    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null });
+    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null });
   });
   content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight }; }), '#e8722c'));
   content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist }; }), '#3a7ae8'));
+  content.appendChild(buildLineChart('Hips (in)', allPoints.map(function(p) { return { label: p.label, val: p.hips }; }), '#c2427a'));
   container.appendChild(content);
 }
 
@@ -1292,6 +1373,30 @@ function renderProgressScreen(container) {
   };
   restartWrap.appendChild(restartBtn);
   content.appendChild(restartWrap);
+
+  const newProgramWrap = document.createElement('div');
+  newProgramWrap.className = 'card';
+  newProgramWrap.style.cssText = 'border: 2px solid #b9cdf0;';
+  newProgramWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Want to switch programs now?</p><p class="ex-scheme" style="margin-bottom:10px;">Start a brand new program right away without waiting for this cycle to finish. Your current progress stays saved.</p>';
+  const newProgramBtn = document.createElement('button');
+  newProgramBtn.textContent = 'Create New Program';
+  newProgramBtn.style.cssText = 'width:100%;padding:12px;background:#eef3fb;color:#1c3a7a;border:1px solid #b9cdf0;border-radius:10px;font-size:14px;font-weight:600;';
+  newProgramBtn.onclick = function() {
+    if (confirm('Start a brand new program now? Your current cycle data stays saved for progress tracking, and you will choose a new program length and goal.')) {
+      const hasData = state.checkpoints && ((state.checkpoints.start && state.checkpoints.start.weight) || (state.checkpoints.week4 && state.checkpoints.week4.weight) || (state.checkpoints.week8 && state.checkpoints.week8.weight));
+      if (hasData) { state.archivedCheckpoints.push({ cycle: state.cycle, start: state.checkpoints.start, week4: state.checkpoints.week4, week8: state.checkpoints.week8 }); }
+      state.goalHistory.push({ cycle: state.cycle, goal: state.goal, length: state.programLength });
+      state.checkpoints = { start: {}, week4: {}, week8: {} };
+      state.cycle += 1;
+      state.viewingCycle = state.cycle;
+      state.week = 1;
+      state.screen = 'select_goal';
+      saveState();
+      render();
+    }
+  };
+  newProgramWrap.appendChild(newProgramBtn);
+  content.appendChild(newProgramWrap);
   const stepsEntries = [];
   Object.keys(state.activePlan).forEach(function(dayKey) {
     for (let c = 1; c <= state.cycle; c++) {
