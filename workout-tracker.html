@@ -118,7 +118,19 @@ const exerciseLibrary = {
   farmer_carry: { name: 'Farmer carry', muscle: 'core', scheme: '3 x 45 sec', link: YT('farmer carry proper form'), noWeight: true },
   treadmill: { name: 'Treadmill', muscle: 'cardio', scheme: '5 min', link: null, noWeight: true },
   bike: { name: 'Bike', muscle: 'cardio', scheme: '5 min', link: null, noWeight: true },
-  incline_walk: { name: 'Incline walk', muscle: 'cardio', scheme: '10 min', link: null, noWeight: true }
+  incline_walk: { name: 'Incline walk', muscle: 'cardio', scheme: '10 min', link: null, noWeight: true },
+  yoga_child_pose: { name: "Child's Pose", muscle: 'yoga', scheme: '1 x 60 sec', link: YT('childs pose yoga tutorial'), noWeight: true },
+  yoga_downward_dog: { name: 'Downward Dog', muscle: 'yoga', scheme: '1 x 45 sec', link: YT('downward dog yoga tutorial'), noWeight: true },
+  yoga_cat_cow: { name: 'Cat-Cow Stretch', muscle: 'yoga', scheme: '10 reps', link: YT('cat cow yoga stretch tutorial'), noWeight: true },
+  yoga_warrior_1: { name: 'Warrior I', muscle: 'yoga', scheme: '1 x 30 sec each side', link: YT('warrior 1 pose yoga tutorial'), noWeight: true },
+  yoga_warrior_2: { name: 'Warrior II', muscle: 'yoga', scheme: '1 x 30 sec each side', link: YT('warrior 2 pose yoga tutorial'), noWeight: true },
+  yoga_triangle: { name: 'Triangle Pose', muscle: 'yoga', scheme: '1 x 30 sec each side', link: YT('triangle pose yoga tutorial'), noWeight: true },
+  yoga_tree_pose: { name: 'Tree Pose', muscle: 'yoga', scheme: '1 x 30 sec each side', link: YT('tree pose yoga tutorial'), noWeight: true },
+  yoga_cobra: { name: 'Cobra Pose', muscle: 'yoga', scheme: '1 x 30 sec', link: YT('cobra pose yoga tutorial'), noWeight: true },
+  yoga_bridge: { name: 'Bridge Pose', muscle: 'yoga', scheme: '1 x 45 sec', link: YT('bridge pose yoga tutorial'), noWeight: true },
+  yoga_pigeon: { name: 'Pigeon Pose', muscle: 'yoga', scheme: '1 x 45 sec each side', link: YT('pigeon pose yoga tutorial'), noWeight: true },
+  yoga_seated_forward_fold: { name: 'Seated Forward Fold', muscle: 'yoga', scheme: '1 x 45 sec', link: YT('seated forward fold yoga tutorial'), noWeight: true },
+  yoga_savasana: { name: 'Savasana (Final Rest)', muscle: 'yoga', scheme: '1 x 3-5 min', link: YT('savasana final relaxation yoga tutorial'), noWeight: true }
 };
 
 const substituteGroups = {};
@@ -139,6 +151,11 @@ const mobility = {
 };
 
 const goalTemplates = {
+  yoga: {
+    label: 'Yoga',
+    desc: 'A calming, flexibility-focused flow with guided how-to videos for every pose',
+    subgoals: null
+  },
   get_stronger: {
     label: 'Get Stronger',
     desc: 'Push/Pull/Legs split focused on building strength across major lifts',
@@ -159,6 +176,9 @@ const goalTemplates = {
 };
 
 const programLibrary = {
+  '4_yoga': { days: { mon: { label: 'Mon Gentle Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_child_pose', 'yoga_downward_dog', 'yoga_cobra'], finisherId: null }, tue: { label: 'Tue Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, wed: { label: 'Wed Balance Flow', warmupId: 'treadmill', exerciseIds: ['yoga_tree_pose', 'yoga_warrior_1', 'yoga_triangle'], finisherId: null }, thu: { label: 'Thu Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, fri: { label: 'Fri Full Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_downward_dog', 'yoga_warrior_2', 'yoga_bridge', 'yoga_savasana'], finisherId: null }, sat: { label: 'Sat Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, sun: { label: 'Sun Restorative', warmupId: 'treadmill', exerciseIds: ['yoga_seated_forward_fold', 'yoga_pigeon', 'yoga_savasana'], finisherId: null } } },
+  '8_yoga': { days: { mon: { label: 'Mon Gentle Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_child_pose', 'yoga_downward_dog', 'yoga_cobra', 'yoga_bridge'], finisherId: null }, tue: { label: 'Tue Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, wed: { label: 'Wed Balance Flow', warmupId: 'treadmill', exerciseIds: ['yoga_tree_pose', 'yoga_warrior_1', 'yoga_warrior_2', 'yoga_triangle'], finisherId: null }, thu: { label: 'Thu Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, fri: { label: 'Fri Full Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_downward_dog', 'yoga_warrior_2', 'yoga_bridge', 'yoga_pigeon', 'yoga_savasana'], finisherId: null }, sat: { label: 'Sat Active Rest', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' }, sun: { label: 'Sun Restorative', warmupId: 'treadmill', exerciseIds: ['yoga_seated_forward_fold', 'yoga_pigeon', 'yoga_child_pose', 'yoga_savasana'], finisherId: null } } },
+  '12_yoga': { days: { mon: { label: 'Mon Gentle Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_child_pose', 'yoga_downward_dog', 'yoga_cobra', 'yoga_bridge', 'yoga_savasana'], finisherId: null }, tue: { label: 'Tue Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, wed: { label: 'Wed Balance Flow', warmupId: 'treadmill', exerciseIds: ['yoga_tree_pose', 'yoga_warrior_1', 'yoga_warrior_2', 'yoga_triangle', 'yoga_savasana'], finisherId: null }, thu: { label: 'Thu Rest', rest: true, items: ['Rest day', 'Optional light walk'], stepsGoal: '6,000+' }, fri: { label: 'Fri Full Flow', warmupId: 'treadmill', exerciseIds: ['yoga_cat_cow', 'yoga_downward_dog', 'yoga_warrior_2', 'yoga_bridge', 'yoga_pigeon', 'yoga_savasana'], finisherId: null }, sat: { label: 'Sat Active Rest', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' }, sun: { label: 'Sun Restorative', warmupId: 'treadmill', exerciseIds: ['yoga_seated_forward_fold', 'yoga_pigeon', 'yoga_child_pose', 'yoga_triangle', 'yoga_savasana'], finisherId: null } } },
   '4_get_stronger_total_body': { days: { mon: { label: 'Mon Push', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'shoulder_press_machine', 'triceps_pushdown'], finisherId: 'incline_walk' }, tue: { label: 'Tue Legs', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'seated_leg_curl', 'calf_raise_machine'], finisherId: null }, wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: chest'], stepsGoal: '10,000+' }, thu: { label: 'Thu Pull', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'seated_cable_row', 'hammer_curl'], finisherId: 'incline_walk' }, fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'incline_db_press', 'lat_pulldown', 'plank'], finisherId: 'incline_walk' }, sat: { label: 'Sat Cardio', rest: true, items: ['30-45 min walk, OR bike for 20 min'], stepsGoal: '8,000-10,000' }, sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] } } },
   '8_get_stronger_total_body': { days: { mon: { label: 'Mon Push', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'shoulder_press_machine', 'cable_lateral_raise', 'triceps_pushdown'], finisherId: 'incline_walk' }, tue: { label: 'Tue Legs', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'walking_lunge', 'seated_leg_curl', 'calf_raise_machine', 'plank'], finisherId: null }, wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: hip flexors', 'Stretch: chest', 'Stretch: upper back'], stepsGoal: '10,000+' }, thu: { label: 'Thu Pull', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'chest_supported_row', 'seated_cable_row', 'face_pull', 'hammer_curl', 'cable_curl'], finisherId: 'incline_walk' }, fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'incline_db_press', 'lat_pulldown', 'smith_rdl', 'cable_woodchop', 'farmer_carry'], finisherId: 'incline_walk' }, sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' }, sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] } } },
   '12_get_stronger_total_body': { days: { mon: { label: 'Mon Push', warmupId: 'treadmill', exerciseIds: ['chest_press_machine', 'incline_db_press', 'shoulder_press_machine', 'cable_lateral_raise', 'triceps_pushdown', 'overhead_triceps_ext'], finisherId: 'incline_walk' }, tue: { label: 'Tue Legs', warmupId: 'bike', exerciseIds: ['smith_rdl', 'leg_press', 'walking_lunge', 'seated_leg_curl', 'leg_extension', 'calf_raise_machine', 'plank'], finisherId: null }, wed: { label: 'Wed Recovery', rest: true, items: ['10,000+ steps today', 'Stretch: hamstrings', 'Stretch: hip flexors', 'Stretch: chest', 'Stretch: upper back'], stepsGoal: '10,000+' }, thu: { label: 'Thu Pull', warmupId: 'treadmill', exerciseIds: ['lat_pulldown', 'chest_supported_row', 'seated_cable_row', 'face_pull', 'hammer_curl', 'cable_curl'], finisherId: 'incline_walk' }, fri: { label: 'Fri Full Body', warmupId: 'treadmill', exerciseIds: ['goblet_squat', 'incline_db_press', 'lat_pulldown', 'smith_rdl', 'cable_woodchop', 'farmer_carry'], finisherId: 'incline_walk' }, sat: { label: 'Sat Cardio', rest: true, items: ['45-60 min walk, OR bike for 30 min'], stepsGoal: '10,000-12,000' }, sun: { label: 'Sun Rest', rest: true, items: ['Rest', 'Stretch', 'Foam roll', 'Walk if desired'] } } },
@@ -224,7 +244,10 @@ let state = {
   celebratedDays: [],
   celebratedWeeks: [],
   celebratedCycles: [],
-  checkinAcks: []
+  checkinAcks: [],
+  proteinGoal: null,
+  proteinPromptShown: false,
+  proteinEntries: {}
 };
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -284,6 +307,7 @@ async function loadState() {
     }
   } catch (e) {}
   if (!state.disclaimerAccepted) { render(); return; }
+  if (!state.proteinGoal && !state.proteinPromptShown) { render(); return; }
   if (!state.goal || !state.activePlan) { state.screen = 'select_goal'; }
   render();
 }
@@ -292,8 +316,55 @@ function acceptDisclaimer() {
   state.disclaimerAccepted = true;
   state.disclaimerAcceptedDate = todayStr();
   saveState();
+  render();
+}
+
+function setProteinGoal(grams) {
+  const parsed = parseInt(grams, 10);
+  if (!parsed || parsed <= 0) { toast('Enter a valid number'); return; }
+  state.proteinGoal = parsed;
+  state.proteinPromptShown = true;
+  saveState();
   if (!state.goal || !state.activePlan) { state.screen = 'select_goal'; }
   render();
+}
+
+function skipProteinGoal() {
+  state.proteinPromptShown = true;
+  saveState();
+  if (!state.goal || !state.activePlan) { state.screen = 'select_goal'; }
+  render();
+}
+
+function renderProteinGoalSetup() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  wrap.innerHTML = '<h2>Track daily protein? (optional)</h2><p>Set a daily protein goal to track intake against a target. You can skip this and turn it on anytime later from the Protein tab.</p>';
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.inputMode = 'numeric';
+  input.placeholder = 'e.g. 160';
+  input.style.cssText = 'width:100%;padding:16px;border-radius:12px;border:2px solid #e6e4dc;font-size:18px;font-weight:600;text-align:center;margin-bottom:16px;';
+  wrap.appendChild(input);
+  const unit = document.createElement('div');
+  unit.style.cssText = 'font-size:13px;color:#999;margin-bottom:20px;';
+  unit.textContent = 'grams per day';
+  wrap.appendChild(unit);
+  const btn = document.createElement('button');
+  btn.className = 'goal-btn';
+  btn.style.cssText = 'text-align:center;background:#1c1c1a;color:#fff;border-color:#1c1c1a;';
+  btn.textContent = 'Set Goal and Continue';
+  btn.onclick = function() { setProteinGoal(input.value); };
+  wrap.appendChild(btn);
+  const skipBtn = document.createElement('button');
+  skipBtn.className = 'modal-close';
+  skipBtn.textContent = 'Skip for now';
+  skipBtn.onclick = function() { skipProteinGoal(); };
+  wrap.appendChild(skipBtn);
+  app.appendChild(wrap);
+  input.focus();
 }
 
 function chooseGoalTop(goalKey) {
@@ -385,6 +456,65 @@ function getAllEntriesForExercise(exId) {
       for (let w = 1; w <= (state.programLength || 8); w++) {
         const e = getEntry(dayKey, exId, w, c);
         if (e && e.weight) results.push({ week: w, cycle: c, dayKey: dayKey, weight: parseFloat(e.weight), date: e.date });
+      }
+    }
+  });
+  return results;
+}
+
+const proteinPresets = [
+  { name: 'Chicken breast (100g)', grams: 31 },
+  { name: 'Egg (1 large)', grams: 6 },
+  { name: 'Greek yogurt (170g)', grams: 17 },
+  { name: 'Whey protein scoop', grams: 24 },
+  { name: 'Ground beef 90/10 (100g)', grams: 26 },
+  { name: 'Cottage cheese (100g)', grams: 11 },
+  { name: 'Salmon (100g)', grams: 22 },
+  { name: 'Tofu (100g)', grams: 8 },
+  { name: 'Milk (1 cup)', grams: 8 },
+  { name: 'Black beans (1 cup)', grams: 15 }
+];
+
+function proteinDayKey(dayKey, cycle, week) {
+  return dayKey + '::c' + cycle + '::w' + week;
+}
+
+function getProteinEntries(dayKey, cycle, week) {
+  const c = cycle !== undefined ? cycle : state.viewingCycle;
+  const w = week !== undefined ? week : state.week;
+  const key = proteinDayKey(dayKey, c, w);
+  return state.proteinEntries[key] || [];
+}
+
+function addProteinEntry(dayKey, name, grams) {
+  const key = proteinDayKey(dayKey, state.viewingCycle, state.week);
+  if (!state.proteinEntries[key]) state.proteinEntries[key] = [];
+  state.proteinEntries[key].push({ name: name, grams: grams, time: todayStr() });
+  saveState();
+}
+
+function removeProteinEntry(dayKey, index) {
+  const key = proteinDayKey(dayKey, state.viewingCycle, state.week);
+  if (state.proteinEntries[key]) {
+    state.proteinEntries[key].splice(index, 1);
+    saveState();
+  }
+}
+
+function getDailyProteinTotal(dayKey, cycle, week) {
+  const entries = getProteinEntries(dayKey, cycle, week);
+  let total = 0;
+  entries.forEach(function(e) { total += (parseFloat(e.grams) || 0); });
+  return total;
+}
+
+function getAllProteinTotals() {
+  const results = [];
+  Object.keys(state.activePlan).forEach(function(dayKey) {
+    for (let c = 1; c <= state.cycle; c++) {
+      for (let w = 1; w <= (state.programLength || 8); w++) {
+        const total = getDailyProteinTotal(dayKey, c, w);
+        if (total > 0) results.push({ week: w, cycle: c, dayKey: dayKey, total: total });
       }
     }
   });
@@ -1161,6 +1291,155 @@ function renderProgressScreen(container) {
   container.appendChild(content);
 }
 
+function renderProteinScreen(container) {
+  const content = document.createElement('div');
+  content.className = 'content';
+
+  if (!state.proteinGoal) {
+    const optInCard = document.createElement('div');
+    optInCard.className = 'card';
+    optInCard.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Track your protein intake?</p><p class="ex-scheme" style="margin-bottom:12px;">Set a daily goal to start logging food and tracking progress toward it.</p>';
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.inputMode = 'numeric';
+    input.placeholder = 'e.g. 160';
+    input.style.cssText = 'width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:16px;font-weight:600;text-align:center;margin-bottom:10px;';
+    optInCard.appendChild(input);
+    const setBtn = document.createElement('button');
+    setBtn.textContent = 'Set Daily Goal';
+    setBtn.style.cssText = 'width:100%;padding:12px;background:#e8722c;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;';
+    setBtn.onclick = function() {
+      const parsed = parseInt(input.value, 10);
+      if (!parsed || parsed <= 0) { toast('Enter a valid number'); return; }
+      state.proteinGoal = parsed;
+      state.proteinPromptShown = true;
+      saveState();
+      render();
+    };
+    optInCard.appendChild(setBtn);
+    content.appendChild(optInCard);
+    container.appendChild(content);
+    return;
+  }
+
+  const total = getDailyProteinTotal(state.day, state.viewingCycle, state.week);
+  const remaining = Math.max(0, state.proteinGoal - total);
+  const pct = Math.min(100, Math.round((total / state.proteinGoal) * 100));
+
+  const summaryCard = document.createElement('div');
+  summaryCard.className = 'card';
+  summaryCard.innerHTML =
+    '<p class="ex-name" style="font-size:16px;">' + (state.activePlan[state.day] ? state.activePlan[state.day].label : state.day) + ' protein</p>' +
+    '<div style="font-size:32px;font-weight:800;margin:8px 0;">' + total + '<span style="font-size:16px;color:#999;font-weight:600;"> / ' + state.proteinGoal + 'g</span></div>' +
+    '<div style="background:#f0efe9;border-radius:20px;height:10px;overflow:hidden;margin-bottom:8px;"><div style="background:#e8722c;height:100%;width:' + pct + '%;"></div></div>' +
+    '<div style="font-size:13px;color:#777;">' + (remaining > 0 ? (remaining + 'g to go') : 'Goal reached!') + '</div>';
+  content.appendChild(summaryCard);
+
+  const editGoalBtn = document.createElement('button');
+  editGoalBtn.textContent = 'Edit daily goal';
+  editGoalBtn.style.cssText = 'width:100%;padding:8px;background:none;border:none;color:#999;font-size:12px;text-decoration:underline;margin-bottom:16px;';
+  editGoalBtn.onclick = function() {
+    const newGoal = prompt('Enter new daily protein goal (grams):', state.proteinGoal);
+    if (newGoal) {
+      const parsed = parseInt(newGoal, 10);
+      if (parsed > 0) { state.proteinGoal = parsed; saveState(); render(); }
+    }
+  };
+  content.appendChild(editGoalBtn);
+
+  const quickLabel = document.createElement('div');
+  quickLabel.className = 'section-label';
+  quickLabel.textContent = 'Quick Add';
+  content.appendChild(quickLabel);
+
+  const quickWrap = document.createElement('div');
+  quickWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;';
+  proteinPresets.forEach(function(preset) {
+    const btn = document.createElement('button');
+    btn.textContent = preset.name + ' \u00b7 ' + preset.grams + 'g';
+    btn.style.cssText = 'padding:10px 14px;background:#fff;border:1px solid #e6e4dc;border-radius:20px;font-size:13px;font-weight:600;color:#1c1c1a;';
+    btn.onclick = function() {
+      addProteinEntry(state.day, preset.name, preset.grams);
+      render();
+      toast('Added ' + preset.grams + 'g');
+    };
+    quickWrap.appendChild(btn);
+  });
+  content.appendChild(quickWrap);
+
+  const customLabel = document.createElement('div');
+  customLabel.className = 'section-label';
+  customLabel.textContent = 'Add Custom Food';
+  content.appendChild(customLabel);
+
+  const customCard = document.createElement('div');
+  customCard.className = 'card';
+  customCard.innerHTML =
+    '<div style="display:flex;gap:8px;">' +
+    '<input id="custom-food-name" type="text" placeholder="Food name" style="flex:2;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;">' +
+    '<input id="custom-food-grams" type="number" inputmode="numeric" placeholder="Grams" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;">' +
+    '</div>';
+  const addBtn = document.createElement('button');
+  addBtn.textContent = 'Add';
+  addBtn.style.cssText = 'width:100%;padding:10px;margin-top:10px;background:#e8722c;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;';
+  addBtn.onclick = function() {
+    const nameInput = document.getElementById('custom-food-name');
+    const gramsInput = document.getElementById('custom-food-grams');
+    const grams = parseFloat(gramsInput.value);
+    if (!nameInput.value || !grams || grams <= 0) { toast('Enter a food name and grams'); return; }
+    addProteinEntry(state.day, nameInput.value, grams);
+    render();
+    toast('Added ' + grams + 'g');
+  };
+  customCard.appendChild(addBtn);
+  content.appendChild(customCard);
+
+  const entries = getProteinEntries(state.day, state.viewingCycle, state.week);
+  if (entries.length > 0) {
+    const loggedLabel = document.createElement('div');
+    loggedLabel.className = 'section-label';
+    loggedLabel.textContent = 'Logged Today';
+    content.appendChild(loggedLabel);
+    entries.forEach(function(entry, idx) {
+      const row = document.createElement('div');
+      row.className = 'card';
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px 14px;';
+      row.innerHTML = '<span style="font-size:14px;">' + entry.name + '</span><span style="font-size:14px;font-weight:700;">' + entry.grams + 'g</span>';
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Remove';
+      delBtn.style.cssText = 'font-size:11px;color:#b31942;background:none;border:none;font-weight:600;margin-left:10px;';
+      delBtn.onclick = function() {
+        removeProteinEntry(state.day, idx);
+        render();
+      };
+      row.appendChild(delBtn);
+      content.appendChild(row);
+    });
+  }
+
+  const graphLabel = document.createElement('div');
+  graphLabel.className = 'section-label';
+  graphLabel.textContent = 'Protein Trend';
+  content.appendChild(graphLabel);
+
+  const allTotals = getAllProteinTotals();
+  if (allTotals.length >= 2) {
+    allTotals.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    const points = allTotals.map(function(e) {
+      const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
+      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.total };
+    });
+    content.appendChild(buildLineChart('Daily Protein (g)', points, '#e8722c'));
+  } else {
+    const nd = document.createElement('div');
+    nd.className = 'rest-note';
+    nd.textContent = 'Log protein on 2 or more days to see your trend graph.';
+    content.appendChild(nd);
+  }
+
+  container.appendChild(content);
+}
+
 function renderDebugScreen(container) {
   const content = document.createElement('div');
   content.className = 'content';
@@ -1251,6 +1530,15 @@ function renderDayTabs(container) {
     render();
   };
   dt.appendChild(pb);
+  const protb = document.createElement('button');
+  protb.className = 'day-tab' + (state.screen === 'protein' ? ' active' : '');
+  protb.textContent = 'Protein';
+  protb.onclick = function() {
+    state.screen = state.screen === 'protein' ? 'day' : 'protein';
+    saveState();
+    render();
+  };
+  dt.appendChild(protb);
   container.appendChild(dt);
 }
 
@@ -1300,6 +1588,7 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
   if (!state.disclaimerAccepted) { renderDisclaimer(); return; }
+  if (!state.proteinGoal && !state.proteinPromptShown) { renderProteinGoalSetup(); return; }
   if (state.screen === 'select_goal') { renderGoalSelect(); return; }
   if (state.screen === 'select_subgoal') { renderSubgoalSelect(); return; }
   if (state.screen === 'select_length') { renderLengthSelect(); return; }
@@ -1307,6 +1596,7 @@ function render() {
   renderWeekPicker(app);
   if (state.screen === 'checkpoints') { renderCheckpointsScreen(app); }
   else if (state.screen === 'progress') { renderProgressScreen(app); }
+  else if (state.screen === 'protein') { renderProteinScreen(app); }
   else if (state.screen === 'debug') { renderDebugScreen(app); }
   else { renderDayContent(app); }
 }
