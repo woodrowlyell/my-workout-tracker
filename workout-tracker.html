@@ -243,6 +243,13 @@ function getProgram(length, goal, subgoal) {
   return programLibrary[buildPlanKey(length, goal, subgoal)];
 }
 
+const DAY_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+function getOrderedDayKeys() {
+  const keys = Object.keys(state.activePlan);
+  return DAY_ORDER.filter(function(d) { return keys.indexOf(d) !== -1; });
+}
+
 let state = {
   screen: 'select_goal',
   disclaimerAccepted: false,
@@ -272,8 +279,7 @@ let state = {
   proteinPromptShown: false,
   proteinEntries: {},
   cycleStartDate: null,
-  lastBackupDate: null,
-  lastBackupReminderShown: null
+  autoBackupHistory: []
 };
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -342,6 +348,29 @@ function migrateToPerDayKeys() {
   if (migratedCount > 0) { toast('Data updated: ' + migratedCount + ' entries migrated'); }
 }
 
+function daysSince(isoDateStr) {
+  if (!isoDateStr) return Infinity;
+  const then = new Date(isoDateStr + 'T00:00:00');
+  const now = new Date(todayStr() + 'T00:00:00');
+  return Math.round((now - then) / (1000 * 60 * 60 * 24));
+}
+
+const AUTO_BACKUP_MAX = 5;
+
+function takeAutoBackupIfDue() {
+  if (!state.autoBackupHistory) state.autoBackupHistory = [];
+  const lastAuto = state.autoBackupHistory.length > 0 ? state.autoBackupHistory[state.autoBackupHistory.length - 1].date : null;
+  if (daysSince(lastAuto) < 1) return;
+  const snapshot = {
+    date: todayStr(),
+    data: JSON.stringify(state)
+  };
+  state.autoBackupHistory.push(snapshot);
+  if (state.autoBackupHistory.length > AUTO_BACKUP_MAX) {
+    state.autoBackupHistory = state.autoBackupHistory.slice(state.autoBackupHistory.length - AUTO_BACKUP_MAX);
+  }
+}
+
 async function loadState() {
   try {
     const raw = localStorage.getItem('workout-state-v3');
@@ -350,6 +379,11 @@ async function loadState() {
       migrateToPerDayKeys();
     }
   } catch (e) {}
+  if (!state.autoBackupHistory) state.autoBackupHistory = [];
+  if (state.activePlan) {
+    takeAutoBackupIfDue();
+    saveState();
+  }
   if (!state.disclaimerAccepted) { render(); return; }
   if (!state.proteinGoal && !state.proteinPromptShown) { render(); return; }
   if (!state.goal || !state.activePlan) { state.screen = 'select_goal'; }
@@ -690,7 +724,7 @@ function openDaySwapModal(sourceDayKey) {
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
   sheet.innerHTML = '<h3>Swap ' + state.activePlan[sourceDayKey].label + '</h3><div class="modal-sub">The workout type moves to the other day, but each day keeps its own name</div>';
-  Object.keys(state.activePlan).forEach(function(otherKey) {
+  getOrderedDayKeys().forEach(function(otherKey) {
     if (otherKey === sourceDayKey) return;
     const opt = document.createElement('div');
     opt.className = 'swap-option';
@@ -794,7 +828,7 @@ function checkAndCelebrate(dayKey, week) {
   const dayCelebrationKey = 'c' + state.cycle + '-w' + week + '-' + dayKey;
   if (isDayComplete(dayKey, week) && state.celebratedDays.indexOf(dayCelebrationKey) === -1) {
     state.celebratedDays.push(dayCelebrationKey);
-    const dayKeys = Object.keys(state.activePlan);
+    const dayKeys = getOrderedDayKeys();
     const currentIndex = dayKeys.indexOf(dayKey);
     if (currentIndex !== -1 && currentIndex < dayKeys.length - 1) {
       state.day = dayKeys[currentIndex + 1];
@@ -815,8 +849,6 @@ function checkAndCelebrate(dayKey, week) {
       showEncouragementModal('week');
       if (shouldShowTip) {
         setTimeout(function() { showTipModal('week'); }, 900);
-      } else if (shouldShowBackupReminder()) {
-        setTimeout(function() { showBackupReminderModal(); }, 900);
       }
       render();
     }, 350);
@@ -866,49 +898,36 @@ function renderCheckinReminder(container) {
   container.appendChild(banner);
 }
 
-function daysSince(isoDateStr) {
-  if (!isoDateStr) return Infinity;
-  const then = new Date(isoDateStr + 'T00:00:00');
-  const now = new Date(todayStr() + 'T00:00:00');
-  return Math.round((now - then) / (1000 * 60 * 60 * 24));
-}
-
-function shouldShowBackupReminder() {
-  const sinceBackup = daysSince(state.lastBackupDate);
-  const sinceShown = daysSince(state.lastBackupReminderShown);
-  if (sinceBackup < 7) return false;
-  if (sinceShown < 3) return false;
-  return true;
-}
-
-function renderBackupReminder(container) {
-  if (!shouldShowBackupReminder()) return;
-  const banner = document.createElement('div');
-  banner.style.cssText = 'background:#fdf0e6;border:2px solid #e8722c;border-radius:12px;padding:14px;margin-bottom:14px;';
-  const daysText = state.lastBackupDate ? ('It has been ' + daysSince(state.lastBackupDate) + ' days since your last backup.') : 'You have not backed up your data yet.';
-  banner.innerHTML = '<div style="font-weight:700;color:#7a4a1c;margin-bottom:6px;">Back up your progress</div>' +
-    '<div style="font-size:13px;color:#7a4a1c;margin-bottom:10px;">' + daysText + ' A quick backup only takes a second.</div>';
-  const btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;gap:8px;';
-  const backupNowBtn = document.createElement('button');
-  backupNowBtn.textContent = 'Back Up Now';
-  backupNowBtn.style.cssText = 'flex:1;padding:8px 12px;background:#e8722c;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;';
-  backupNowBtn.onclick = function() {
-    downloadBackupFile();
-    render();
-  };
-  btnRow.appendChild(backupNowBtn);
-  const laterBtn = document.createElement('button');
-  laterBtn.textContent = 'Remind Me Later';
-  laterBtn.style.cssText = 'flex:1;padding:8px 12px;background:#fff;color:#7a4a1c;border:1px solid #f0cba4;border-radius:8px;font-size:13px;font-weight:600;';
-  laterBtn.onclick = function() {
-    state.lastBackupReminderShown = todayStr();
-    saveState();
-    render();
-  };
-  btnRow.appendChild(laterBtn);
-  banner.appendChild(btnRow);
-  container.appendChild(banner);
+function renderAutoBackupList(container) {
+  const wrap = document.createElement('div');
+  wrap.className = 'backup-box';
+  wrap.style.borderColor = '#b9cdf0';
+  wrap.innerHTML = '<h4 style="color:#1c3a7a;">Automatic snapshots</h4><p>The app keeps your last ' + AUTO_BACKUP_MAX + ' daily snapshots automatically, in case you need to go back. These live only on this device.</p>';
+  if (!state.autoBackupHistory || state.autoBackupHistory.length === 0) {
+    const nd = document.createElement('p');
+    nd.style.cssText = 'font-size:12px;color:#999;';
+    nd.textContent = 'No automatic snapshots yet. One is taken each day you open the app.';
+    wrap.appendChild(nd);
+  } else {
+    const list = state.autoBackupHistory.slice().reverse();
+    list.forEach(function(snap) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #f0efe9;';
+      row.innerHTML = '<span style="font-size:13px;">' + snap.date + '</span>';
+      const restoreBtn = document.createElement('button');
+      restoreBtn.textContent = 'Restore this';
+      restoreBtn.style.cssText = 'font-size:12px;font-weight:700;padding:6px 10px;background:#eef3fb;color:#1c3a7a;border:1px solid #b9cdf0;border-radius:8px;';
+      restoreBtn.onclick = function() {
+        if (!confirm('Restore your data to the snapshot from ' + snap.date + '? This will replace everything currently in the app.')) return;
+        localStorage.setItem('workout-state-v3', snap.data);
+        toast('Restored, reloading...');
+        setTimeout(function() { window.location.reload(); }, 800);
+      };
+      row.appendChild(restoreBtn);
+      wrap.appendChild(row);
+    });
+  }
+  container.appendChild(wrap);
 }
 
 function renderInlineProteinBlock(dayKey) {
@@ -965,8 +984,6 @@ function downloadBackupFile() {
     a.click();
     document.body.removeChild(a);
     setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
-    state.lastBackupDate = todayStr();
-    saveState();
     toast('Backup downloaded');
   } catch (e) {
     toast('Backup failed: ' + e.message);
@@ -976,8 +993,6 @@ function downloadBackupFile() {
 function copyBackupToClipboard() {
   try {
     const raw = localStorage.getItem('workout-state-v3') || JSON.stringify(state);
-    state.lastBackupDate = todayStr();
-    saveState();
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(raw).then(function() {
         toast('Copied to clipboard');
@@ -1074,37 +1089,6 @@ function renderBackupBox(container) {
   restoreBtn.onclick = openRestoreBox;
   wrap.appendChild(restoreBtn);
   container.appendChild(wrap);
-}
-
-function showBackupReminderModal() {
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  const sheet = document.createElement('div');
-  sheet.className = 'modal-sheet';
-  sheet.style.textAlign = 'center';
-  sheet.innerHTML = '<h3>Nice week! Back up your progress?</h3><div class="modal-sub">It has been a while since your last backup. A quick download only takes a second, and protects everything you just logged.</div>';
-  const backupBtn = document.createElement('button');
-  backupBtn.className = 'goal-btn';
-  backupBtn.style.cssText = 'text-align:center;background:#4caf50;color:#fff;border-color:#4caf50;';
-  backupBtn.textContent = 'Back Up Now';
-  backupBtn.onclick = function() {
-    downloadBackupFile();
-    document.body.removeChild(overlay);
-    render();
-  };
-  sheet.appendChild(backupBtn);
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'modal-close';
-  closeBtn.textContent = 'Remind me later';
-  closeBtn.onclick = function() {
-    state.lastBackupReminderShown = todayStr();
-    saveState();
-    document.body.removeChild(overlay);
-  };
-  sheet.appendChild(closeBtn);
-  overlay.appendChild(sheet);
-  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
-  document.body.appendChild(overlay);
 }
 
 function showTipModal(context) {
@@ -1388,7 +1372,6 @@ function renderStepsBlock(dayKey, stepsGoalText) {
 function renderDayContent(container) {
   const content = document.createElement('div');
   content.className = 'content';
-  renderBackupReminder(content);
   renderCheckinReminder(content);
   const day = state.activePlan[state.day];
   if (day.rest) {
@@ -1637,6 +1620,7 @@ function renderProgressScreen(container) {
   content.appendChild(intro);
 
   renderBackupBox(content);
+  renderAutoBackupList(content);
 
   const restartWrap = document.createElement('div');
   restartWrap.className = 'card';
@@ -1955,7 +1939,7 @@ function renderDayTabs(container) {
   dt.style.cssText = 'flex-wrap:nowrap;overflow-x:visible;';
   const daySelectWrap = document.createElement('div');
   daySelectWrap.style.cssText = 'flex:1;min-width:0;';
-  const keys = Object.keys(state.activePlan);
+  const keys = getOrderedDayKeys();
   const daySelect = document.createElement('select');
   daySelect.style.cssText = 'width:100%;padding:10px 12px;border-radius:8px;border:1px solid #ddd;background:#f7f6f2;font-size:14px;font-weight:600;color:#1c1c1a;';
   keys.forEach(function(key) {
