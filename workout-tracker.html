@@ -1128,6 +1128,86 @@ function showTipModal(context) {
   document.body.appendChild(overlay);
 }
 
+function deleteCycle(cycleNum) {
+  if (state.cycle === 1 && Object.keys(state.archivedCheckpoints || []).length === 0) {
+    toast('Cannot delete the only cycle');
+    return;
+  }
+  if (!confirm('Delete Cycle ' + cycleNum + '? This permanently removes all weights, protein logs, checkpoints, and history for that cycle only. This cannot be undone.')) return;
+  if (!confirm('Are you sure? Cycle ' + cycleNum + ' data will be gone for good.')) return;
+
+  const cyclePrefix = '::c' + cycleNum + '::';
+  const newWeights = {};
+  Object.keys(state.weights).forEach(function(k) {
+    if (k.indexOf(cyclePrefix) === -1) newWeights[k] = state.weights[k];
+  });
+  state.weights = newWeights;
+
+  const newProteinEntries = {};
+  Object.keys(state.proteinEntries).forEach(function(k) {
+    if (k.indexOf('::c' + cycleNum + '::') === -1) newProteinEntries[k] = state.proteinEntries[k];
+  });
+  state.proteinEntries = newProteinEntries;
+
+  state.archivedCheckpoints = (state.archivedCheckpoints || []).filter(function(a) { return a.cycle !== cycleNum; });
+  state.goalHistory = (state.goalHistory || []).filter(function(g) { return g.cycle !== cycleNum; });
+
+  const cycleTag = 'c' + cycleNum + '-';
+  state.celebratedDays = (state.celebratedDays || []).filter(function(k) { return k.indexOf(cycleTag) !== 0; });
+  state.celebratedWeeks = (state.celebratedWeeks || []).filter(function(k) { return k.indexOf(cycleTag) !== 0; });
+  state.celebratedCycles = (state.celebratedCycles || []).filter(function(k) { return k !== ('c' + cycleNum); });
+
+  if (cycleNum === state.checkpointsCycle || (cycleNum === state.cycle && !state.archivedCheckpoints.some(function(a){return a.cycle===cycleNum;}))) {
+    state.checkpoints = { start: {}, week4: {}, week8: {} };
+  }
+
+  const remainingCycles = [];
+  for (let c = 1; c <= state.cycle; c++) {
+    if (c === cycleNum) continue;
+    const hasWeights = Object.keys(state.weights).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
+    const hasProtein = Object.keys(state.proteinEntries).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
+    const hasArchive = state.archivedCheckpoints.some(function(a) { return a.cycle === c; });
+    if (hasWeights || hasProtein || hasArchive || c === 1) remainingCycles.push(c);
+  }
+  const newHighestCycle = remainingCycles.length > 0 ? Math.max.apply(null, remainingCycles) : 1;
+
+  if (cycleNum === state.cycle) {
+    state.cycle = newHighestCycle;
+    state.viewingCycle = newHighestCycle;
+    state.week = 1;
+  } else if (state.viewingCycle === cycleNum) {
+    state.viewingCycle = newHighestCycle;
+    state.week = 1;
+  }
+
+  saveState();
+  render();
+  toast('Cycle ' + cycleNum + ' deleted');
+}
+
+function renderCycleManager(container) {
+  if (state.cycle <= 1) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  wrap.style.cssText = 'border: 1px solid #f0cba4;';
+  wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Manage cycles</p><p class="ex-scheme" style="margin-bottom:10px;">Delete cycles you did not mean to create. This only affects this device.</p>';
+  for (let c = 1; c <= state.cycle; c++) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #f0efe9;';
+    const isCurrent = c === state.cycle;
+    row.innerHTML = '<span style="font-size:13px;">Cycle ' + c + (isCurrent ? ' (current)' : '') + '</span>';
+    if (state.cycle > 1) {
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.style.cssText = 'font-size:12px;font-weight:700;padding:6px 10px;background:#fdf0e6;color:#a11c56;border:1px solid #f0cba4;border-radius:8px;';
+      delBtn.onclick = function() { deleteCycle(c); };
+      row.appendChild(delBtn);
+    }
+    wrap.appendChild(row);
+  }
+  container.appendChild(wrap);
+}
+
 function renderTipLink(container) {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'margin-top:16px;background:#fdf0e6;border:2px solid #e8722c;border-radius:14px;padding:18px;text-align:center;';
@@ -1626,6 +1706,7 @@ function renderProgressScreen(container) {
 
   renderBackupBox(content);
   renderAutoBackupList(content);
+  renderCycleManager(content);
 
   const restartWrap = document.createElement('div');
   restartWrap.className = 'card';
