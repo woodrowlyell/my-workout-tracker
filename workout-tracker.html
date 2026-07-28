@@ -661,12 +661,23 @@ function openSwapModal(dayKey, exIndex) {
   document.body.appendChild(overlay);
 }
 
+function splitDayLabel(label) {
+  const dayPrefixes = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  for (let i = 0; i < dayPrefixes.length; i++) {
+    const prefix = dayPrefixes[i];
+    if (label.indexOf(prefix + ' ') === 0) {
+      return { dayPart: prefix, typePart: label.substring(prefix.length + 1) };
+    }
+  }
+  return { dayPart: '', typePart: label };
+}
+
 function openDaySwapModal(sourceDayKey) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
-  sheet.innerHTML = '<h3>Swap ' + state.activePlan[sourceDayKey].label + '</h3><div class="modal-sub">The workout content will move to the other day, but the day names stay in order</div>';
+  sheet.innerHTML = '<h3>Swap ' + state.activePlan[sourceDayKey].label + '</h3><div class="modal-sub">The workout type moves to the other day, but each day keeps its own name</div>';
   Object.keys(state.activePlan).forEach(function(otherKey) {
     if (otherKey === sourceDayKey) return;
     const opt = document.createElement('div');
@@ -679,12 +690,12 @@ function openDaySwapModal(sourceDayKey) {
     swapBtn.className = 'swap-btn permanent';
     swapBtn.textContent = 'Swap';
     swapBtn.onclick = function() {
-      const sourceLabel = state.activePlan[sourceDayKey].label;
-      const otherLabel = state.activePlan[otherKey].label;
+      const sourceSplit = splitDayLabel(state.activePlan[sourceDayKey].label);
+      const otherSplit = splitDayLabel(state.activePlan[otherKey].label);
       const sourceContent = Object.assign({}, state.activePlan[sourceDayKey]);
       const otherContent = Object.assign({}, state.activePlan[otherKey]);
-      sourceContent.label = sourceLabel;
-      otherContent.label = otherLabel;
+      sourceContent.label = sourceSplit.dayPart ? (sourceSplit.dayPart + ' ' + otherSplit.typePart) : otherSplit.typePart;
+      otherContent.label = otherSplit.dayPart ? (otherSplit.dayPart + ' ' + sourceSplit.typePart) : sourceSplit.typePart;
       state.activePlan[sourceDayKey] = otherContent;
       state.activePlan[otherKey] = sourceContent;
       state.day = otherKey;
@@ -1121,6 +1132,47 @@ function renderCheckinReminder(container) {
   };
   banner.appendChild(ackBtn);
   container.appendChild(banner);
+}
+
+function renderInlineProteinBlock(dayKey) {
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+
+  if (!state.proteinGoal) {
+    wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Track protein?</p><p class="ex-scheme" style="margin-bottom:10px;">Set a daily goal from the Protein tab in the header to start logging here.</p>';
+    return wrap;
+  }
+
+  const total = getDailyProteinTotal(dayKey, state.viewingCycle, state.week);
+  const remaining = Math.max(0, state.proteinGoal - total);
+  const pct = Math.min(100, Math.round((total / state.proteinGoal) * 100));
+
+  wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Protein today</p>' +
+    '<div style="font-size:24px;font-weight:800;margin-bottom:6px;">' + total + '<span style="font-size:14px;color:#999;font-weight:600;"> / ' + state.proteinGoal + 'g</span></div>' +
+    '<div style="background:#f0efe9;border-radius:20px;height:8px;overflow:hidden;margin-bottom:10px;"><div style="background:#e8722c;height:100%;width:' + pct + '%;"></div></div>';
+
+  const quickWrap = document.createElement('div');
+  quickWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;';
+  proteinPresets.slice(0, 4).forEach(function(preset) {
+    const btn = document.createElement('button');
+    btn.textContent = preset.name.split(' (')[0] + ' \u00b7 ' + preset.grams + 'g';
+    btn.style.cssText = 'padding:8px 10px;background:#fff;border:1px solid #e6e4dc;border-radius:16px;font-size:12px;font-weight:600;color:#1c1c1a;';
+    btn.onclick = function() {
+      addProteinEntry(dayKey, preset.name, preset.grams);
+      render();
+      toast('Added ' + preset.grams + 'g');
+    };
+    quickWrap.appendChild(btn);
+  });
+  wrap.appendChild(quickWrap);
+
+  const seeMoreBtn = document.createElement('button');
+  seeMoreBtn.textContent = 'Open full protein tracker';
+  seeMoreBtn.style.cssText = 'width:100%;padding:8px;background:none;border:none;color:#e8722c;font-size:12px;font-weight:600;text-decoration:underline;';
+  seeMoreBtn.onclick = function() { state.screen = 'protein'; saveState(); render(); };
+  wrap.appendChild(seeMoreBtn);
+
+  return wrap;
 }
 
 function renderDayContent(container) {
@@ -1721,15 +1773,6 @@ function renderDayTabs(container) {
     render();
   };
   dt.appendChild(pb);
-  const protb = document.createElement('button');
-  protb.className = 'day-tab' + (state.screen === 'protein' ? ' active' : '');
-  protb.textContent = 'Protein';
-  protb.onclick = function() {
-    state.screen = state.screen === 'protein' ? 'day' : 'protein';
-    saveState();
-    render();
-  };
-  dt.appendChild(protb);
   container.appendChild(dt);
 }
 
@@ -1744,8 +1787,20 @@ function renderWeekPicker(container) {
       cycleOptions.map(function(c) { return '<option value="' + c + '"' + (c === state.viewingCycle ? ' selected' : '') + '>Cycle ' + c + (c === state.cycle ? ' (current)' : '') + '</option>'; }).join('') +
       '</select>';
   }
-  header.innerHTML = '<h1>' + goalTemplates[state.goal].label + '</h1><div class="sub" id="week-sub"></div>' + cycleSelectHtml + '<div id="week-select-wrap" style="margin-top:10px;"></div>';
+  header.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+    '<div><h1>' + goalTemplates[state.goal].label + '</h1><div class="sub" id="week-sub"></div></div>' +
+    '<button id="protein-toggle-btn" style="flex-shrink:0;padding:8px 14px;background:' + (state.screen === 'protein' ? '#e8722c' : '#2a2a27') + ';color:#fff;border:1px solid ' + (state.screen === 'protein' ? '#e8722c' : '#444') + ';border-radius:8px;font-size:13px;font-weight:600;">Protein</button>' +
+    '</div>' +
+    cycleSelectHtml + '<div id="week-select-wrap" style="margin-top:10px;"></div>';
   container.appendChild(header);
+
+  const proteinToggleBtn = header.querySelector('#protein-toggle-btn');
+  proteinToggleBtn.onclick = function() {
+    state.screen = state.screen === 'protein' ? 'day' : 'protein';
+    saveState();
+    render();
+  };
+
   if (cycleOptions.length > 1) {
     const sel = header.querySelector('#cycle-select');
     sel.onchange = function() { state.viewingCycle = parseInt(sel.value, 10); state.week = 1; saveState(); render(); };
