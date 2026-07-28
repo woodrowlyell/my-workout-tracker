@@ -10,7 +10,7 @@ h1 { font-size: 18px; }
 .box { background: #fff; border: 2px solid #e6e4dc; border-radius: 12px; padding: 16px; margin-bottom: 16px; word-break: break-all; white-space: pre-wrap; font-size: 12px; font-family: monospace; }
 .found { border-color: #4caf50; background: rgba(76,175,80,0.08); }
 .notfound { border-color: #b31942; background: rgba(179,25,66,0.08); }
-.status { font-weight: 700; font-size: 16px; margin-bottom: 10px; }
+.status { font-weight: 700; font-size: 16px; margin-bottom: 10px; font-family: -apple-system, sans-serif; }
 .info { font-size: 13px; color: #666; margin-bottom: 16px; }
 </style>
 </head>
@@ -19,54 +19,51 @@ h1 { font-size: 18px; }
 <div class="info">This page only reads from storage. It does not write, modify, or delete anything.</div>
 <div id="result"></div>
 <script>
-var resultDiv = document.getElementById('result');
+function safeStringify(val) {
+  try {
+    var s = JSON.stringify(val);
+    return (s === undefined) ? 'undefined' : s;
+  } catch (e) {
+    return '(could not stringify: ' + e.message + ')';
+  }
+}
+
+function addBox(className, text) {
+  var box = document.createElement('div');
+  box.className = 'box ' + className;
+  box.textContent = String(text);
+  document.getElementById('result').appendChild(box);
+}
+
 try {
   var raw = localStorage.getItem('workout-state-v3');
   if (raw) {
     var sizeKB = (new Blob([raw]).size / 1024).toFixed(1);
-    var box = document.createElement('div');
-    box.className = 'box found';
-    var status = document.createElement('div');
-    status.className = 'status';
-    status.textContent = 'FOUND: workout-state-v3 exists (' + sizeKB + ' KB)';
-    resultDiv.appendChild(status);
+    addBox('found', 'FOUND: workout-state-v3 exists (' + sizeKB + ' KB)');
+
     try {
       var parsed = JSON.parse(raw);
-      var summary = document.createElement('div');
-      summary.className = 'box found';
-      summary.textContent =
-        'Goal: ' + (parsed.goal || 'none') + '\n' +
-        'Cycle: ' + (parsed.cycle || 'unknown') + '\n' +
-        'Week: ' + (parsed.week || 'unknown') + '\n' +
-        'Program length: ' + (parsed.programLength || 'unknown') + '\n' +
-        'Weight entries stored: ' + (parsed.weights ? Object.keys(parsed.weights).length : 0) + '\n' +
-        'Protein entries stored: ' + (parsed.proteinEntries ? Object.keys(parsed.proteinEntries).length : 0) + '\n' +
-        'Checkpoints - start: ' + JSON.stringify(parsed.checkpoints && parsed.checkpoints.start) + '\n' +
-        'Checkpoints - week4: ' + JSON.stringify(parsed.checkpoints && parsed.checkpoints.week4) + '\n' +
-        'Checkpoints - week8: ' + JSON.stringify(parsed.checkpoints && parsed.checkpoints.week8);
-      resultDiv.appendChild(summary);
+      var summaryLines = [
+        'Goal: ' + (parsed.goal || 'none'),
+        'Cycle: ' + (parsed.cycle || 'unknown'),
+        'Week: ' + (parsed.week || 'unknown'),
+        'Program length: ' + (parsed.programLength || 'unknown'),
+        'Weight entries stored: ' + (parsed.weights ? Object.keys(parsed.weights).length : 0),
+        'Protein entries stored: ' + (parsed.proteinEntries ? Object.keys(parsed.proteinEntries).length : 0),
+        'Checkpoints - start: ' + safeStringify(parsed.checkpoints && parsed.checkpoints.start),
+        'Checkpoints - week4: ' + safeStringify(parsed.checkpoints && parsed.checkpoints.week4),
+        'Checkpoints - week8: ' + safeStringify(parsed.checkpoints && parsed.checkpoints.week8)
+      ];
+      addBox('found', summaryLines.join('\n'));
     } catch (parseErr) {
-      var errBox = document.createElement('div');
-      errBox.className = 'box notfound';
-      errBox.textContent = 'Data exists but could not be parsed as JSON. Raw error: ' + parseErr.message;
-      resultDiv.appendChild(errBox);
+      addBox('notfound', 'Data exists but could not be parsed as JSON. Raw error: ' + parseErr.message);
     }
-    var rawBox = document.createElement('div');
-    rawBox.className = 'box found';
-    rawBox.textContent = 'RAW DATA (save this somewhere safe by copying this text):\n\n' + raw;
-    resultDiv.appendChild(rawBox);
+
+    addBox('found', 'RAW DATA (copy this text somewhere safe as a backup):\n\n' + raw);
   } else {
-    var notFoundBox = document.createElement('div');
-    notFoundBox.className = 'box notfound';
-    var status2 = document.createElement('div');
-    status2.className = 'status';
-    status2.textContent = 'NOT FOUND: no data under key "workout-state-v3" at this origin';
-    notFoundBox.appendChild(status2);
-    resultDiv.appendChild(notFoundBox);
+    addBox('notfound', 'NOT FOUND: no data under key "workout-state-v3" at this origin');
   }
 
-  var allKeysBox = document.createElement('div');
-  allKeysBox.className = 'box';
   var allKeysText = 'All localStorage keys at this origin (' + localStorage.length + ' total):\n\n';
   if (localStorage.length === 0) {
     allKeysText += '(none)';
@@ -77,18 +74,11 @@ try {
       allKeysText += k + ' (' + (v ? v.length : 0) + ' characters)\n';
     }
   }
-  allKeysBox.textContent = allKeysText;
-  resultDiv.appendChild(allKeysBox);
+  addBox('', allKeysText);
 
-  var originBox = document.createElement('div');
-  originBox.className = 'box';
-  originBox.textContent = 'Current page origin: ' + window.location.origin + '\nFull URL: ' + window.location.href;
-  resultDiv.appendChild(originBox);
+  addBox('', 'Current page origin: ' + window.location.origin + '\nFull URL: ' + window.location.href);
 } catch (e) {
-  var errorBox = document.createElement('div');
-  errorBox.className = 'box notfound';
-  errorBox.textContent = 'Error while checking storage: ' + e.message;
-  resultDiv.appendChild(errorBox);
+  addBox('notfound', 'Error while checking storage: ' + e.message);
 }
 </script>
 </body>
