@@ -1535,14 +1535,9 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
   const input = row.querySelector('input');
   input.addEventListener('change', function() {
     if (!state.checkpoints[cpKey]) state.checkpoints[cpKey] = {};
-    const hadDataBefore = !!(state.checkpoints[cpKey].weight || state.checkpoints[cpKey].waist || state.checkpoints[cpKey].hips);
     state.checkpoints[cpKey][fieldKey] = input.value;
     const hasDataNow = !!(state.checkpoints[cpKey].weight || state.checkpoints[cpKey].waist || state.checkpoints[cpKey].hips);
-    if (!hadDataBefore && hasDataNow) {
-      state.checkpoints[cpKey].dateEntered = todayStr();
-    } else if (!hasDataNow) {
-      delete state.checkpoints[cpKey].dateEntered;
-    }
+    if (!hasDataNow) { delete state.checkpoints[cpKey].dateEntered; }
     saveState();
     render();
   });
@@ -1657,14 +1652,10 @@ function renderCheckpointsScreen(container) {
     card.className = 'checkpoint-card';
     const h = document.createElement('h3');
     const hasData = state.checkpoints[def.key] && (state.checkpoints[def.key].weight || state.checkpoints[def.key].waist || state.checkpoints[def.key].hips);
-    let dateLabel = '';
-    if (hasData && state.checkpoints[def.key].dateEntered) {
-      dateLabel = ' <span style="color:#1c1c1a;font-weight:600;">(' + formatDateMDY(state.checkpoints[def.key].dateEntered) + ')</span>';
-    } else if (state.cycleStartDate) {
-      const targetDate = getTargetDateForWeek(state.cycleStartDate, def.targetWeek);
-      dateLabel = ' <span style="color:#b31942;font-weight:600;">(' + formatDateMDY(targetDate) + ')</span>';
-    }
-    h.innerHTML = '<span>' + def.title + dateLabel + '</span>';
+    const currentDate = (state.checkpoints[def.key] && state.checkpoints[def.key].dateEntered)
+      ? state.checkpoints[def.key].dateEntered
+      : (state.cycleStartDate ? getTargetDateForWeek(state.cycleStartDate, def.targetWeek) : todayStr());
+    h.innerHTML = '<span>' + def.title + '</span>';
     if (hasData) {
       const delBtn = document.createElement('button');
       delBtn.className = 'cp-delete-btn';
@@ -1673,6 +1664,24 @@ function renderCheckpointsScreen(container) {
       h.appendChild(delBtn);
     }
     card.appendChild(h);
+
+    const dateRow = document.createElement('div');
+    dateRow.className = 'cp-row';
+    dateRow.innerHTML = '<label>Date</label>';
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.value = currentDate;
+    dateInput.style.cssText = 'flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;';
+    dateInput.onchange = function() {
+      if (!dateInput.value) return;
+      if (!state.checkpoints[def.key]) state.checkpoints[def.key] = {};
+      state.checkpoints[def.key].dateEntered = dateInput.value;
+      saveState();
+      render();
+    };
+    dateRow.appendChild(dateInput);
+    card.appendChild(dateRow);
+
     card.appendChild(renderCheckpointField(def.key, 'weight', 'Weight', 'lbs'));
     card.appendChild(renderCheckpointField(def.key, 'waist', 'Waist', 'inches'));
     card.appendChild(renderCheckpointField(def.key, 'hips', 'Hips', 'inches'));
