@@ -291,15 +291,11 @@ function formatDateMDY(isoDateStr) {
   return parts[1] + '-' + parts[2] + '-' + parts[0];
 }
 
-function getMondayOfWeek(startDateStr, weekNumber) {
+function getTargetDateForWeek(startDateStr, weekNumber) {
   const startDate = new Date(startDateStr + 'T00:00:00');
-  const dayOfWeek = startDate.getDay();
-  const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const firstMonday = new Date(startDate);
-  firstMonday.setDate(startDate.getDate() - daysToSubtract);
-  const targetMonday = new Date(firstMonday);
-  targetMonday.setDate(firstMonday.getDate() + (weekNumber - 1) * 7);
-  return targetMonday.toISOString().split('T')[0];
+  const targetDate = new Date(startDate);
+  targetDate.setDate(startDate.getDate() + (weekNumber - 1) * 7);
+  return targetDate.toISOString().split('T')[0];
 }
 
 function toast(msg) {
@@ -1648,9 +1644,14 @@ function renderCheckpointsScreen(container) {
   const finalWeekNum = state.programLength || 8;
   const defs = [
     { key: 'start', title: 'Start', targetWeek: 1 },
-    { key: 'week4', title: 'Week 4', targetWeek: 4 },
-    { key: 'week8', title: 'Week ' + finalWeekNum, targetWeek: finalWeekNum }
+    { key: 'week4', title: 'Week 4', targetWeek: 4 }
   ];
+  if (finalWeekNum > 8) {
+    defs.push({ key: 'week8', title: 'Week 8', targetWeek: 8 });
+    defs.push({ key: 'week12', title: 'Week ' + finalWeekNum, targetWeek: finalWeekNum });
+  } else {
+    defs.push({ key: 'week8', title: 'Week ' + finalWeekNum, targetWeek: finalWeekNum });
+  }
   defs.forEach(function(def) {
     const card = document.createElement('div');
     card.className = 'checkpoint-card';
@@ -1660,7 +1661,7 @@ function renderCheckpointsScreen(container) {
     if (hasData && state.checkpoints[def.key].dateEntered) {
       dateLabel = ' <span style="color:#1c1c1a;font-weight:600;">(' + formatDateMDY(state.checkpoints[def.key].dateEntered) + ')</span>';
     } else if (state.cycleStartDate) {
-      const targetDate = getMondayOfWeek(state.cycleStartDate, def.targetWeek);
+      const targetDate = getTargetDateForWeek(state.cycleStartDate, def.targetWeek);
       dateLabel = ' <span style="color:#b31942;font-weight:600;">(' + formatDateMDY(targetDate) + ')</span>';
     }
     h.innerHTML = '<span>' + def.title + dateLabel + '</span>';
@@ -1849,14 +1850,37 @@ function renderProteinScreen(container) {
     return;
   }
 
-  const total = getDailyProteinTotal(state.day, state.viewingCycle, state.week);
+  if (!state.proteinViewDay) state.proteinViewDay = state.day;
+  const viewDay = state.proteinViewDay;
+
+  const dayPickerWrap = document.createElement('div');
+  dayPickerWrap.style.cssText = 'margin-bottom:14px;';
+  const dayPickerLabel = document.createElement('div');
+  dayPickerLabel.className = 'section-label';
+  dayPickerLabel.textContent = 'Viewing protein for';
+  dayPickerWrap.appendChild(dayPickerLabel);
+  const daySelect = document.createElement('select');
+  daySelect.style.cssText = 'width:100%;padding:10px 12px;border-radius:8px;border:1px solid #ddd;background:#f7f6f2;font-size:14px;font-weight:600;color:#1c1c1a;';
+  getOrderedDayKeys().forEach(function(key) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    const total = getDailyProteinTotal(key, state.viewingCycle, state.week);
+    opt.textContent = state.activePlan[key].label + (total > 0 ? ' (' + total + 'g logged)' : '');
+    if (key === viewDay) opt.selected = true;
+    daySelect.appendChild(opt);
+  });
+  daySelect.onchange = function() { state.proteinViewDay = daySelect.value; render(); };
+  dayPickerWrap.appendChild(daySelect);
+  content.appendChild(dayPickerWrap);
+
+  const total = getDailyProteinTotal(viewDay, state.viewingCycle, state.week);
   const remaining = Math.max(0, state.proteinGoal - total);
   const pct = Math.min(100, Math.round((total / state.proteinGoal) * 100));
 
   const summaryCard = document.createElement('div');
   summaryCard.className = 'card';
   summaryCard.innerHTML =
-    '<p class="ex-name" style="font-size:16px;">' + (state.activePlan[state.day] ? state.activePlan[state.day].label : state.day) + ' protein</p>' +
+    '<p class="ex-name" style="font-size:16px;">' + (state.activePlan[viewDay] ? state.activePlan[viewDay].label : viewDay) + ' protein</p>' +
     '<div style="font-size:32px;font-weight:800;margin:8px 0;">' + total + '<span style="font-size:16px;color:#999;font-weight:600;"> / ' + state.proteinGoal + 'g</span></div>' +
     '<div style="background:#f0efe9;border-radius:20px;height:10px;overflow:hidden;margin-bottom:8px;"><div style="background:#e8722c;height:100%;width:' + pct + '%;"></div></div>' +
     '<div style="font-size:13px;color:#777;">' + (remaining > 0 ? (remaining + 'g to go') : 'Goal reached!') + '</div>';
@@ -1876,7 +1900,7 @@ function renderProteinScreen(container) {
 
   const quickLabel = document.createElement('div');
   quickLabel.className = 'section-label';
-  quickLabel.textContent = 'Quick Add';
+  quickLabel.textContent = 'Quick Add to ' + (state.activePlan[viewDay] ? state.activePlan[viewDay].label : viewDay);
   content.appendChild(quickLabel);
 
   const quickWrap = document.createElement('div');
@@ -1886,7 +1910,7 @@ function renderProteinScreen(container) {
     btn.textContent = preset.name + ' \u00b7 ' + preset.grams + 'g';
     btn.style.cssText = 'padding:10px 14px;background:#fff;border:1px solid #e6e4dc;border-radius:20px;font-size:13px;font-weight:600;color:#1c1c1a;';
     btn.onclick = function() {
-      addProteinEntry(state.day, preset.name, preset.grams);
+      addProteinEntry(viewDay, preset.name, preset.grams);
       render();
       toast('Added ' + preset.grams + 'g');
     };
@@ -1914,18 +1938,18 @@ function renderProteinScreen(container) {
     const gramsInput = document.getElementById('custom-food-grams');
     const grams = parseFloat(gramsInput.value);
     if (!nameInput.value || !grams || grams <= 0) { toast('Enter a food name and grams'); return; }
-    addProteinEntry(state.day, nameInput.value, grams);
+    addProteinEntry(viewDay, nameInput.value, grams);
     render();
     toast('Added ' + grams + 'g');
   };
   customCard.appendChild(addBtn);
   content.appendChild(customCard);
 
-  const entries = getProteinEntries(state.day, state.viewingCycle, state.week);
+  const entries = getProteinEntries(viewDay, state.viewingCycle, state.week);
   if (entries.length > 0) {
     const loggedLabel = document.createElement('div');
     loggedLabel.className = 'section-label';
-    loggedLabel.textContent = 'Logged Today';
+    loggedLabel.textContent = 'Logged for ' + (state.activePlan[viewDay] ? state.activePlan[viewDay].label : viewDay);
     content.appendChild(loggedLabel);
     entries.forEach(function(entry, idx) {
       const row = document.createElement('div');
@@ -1936,12 +1960,17 @@ function renderProteinScreen(container) {
       delBtn.textContent = 'Remove';
       delBtn.style.cssText = 'font-size:11px;color:#b31942;background:none;border:none;font-weight:600;margin-left:10px;';
       delBtn.onclick = function() {
-        removeProteinEntry(state.day, idx);
+        removeProteinEntry(viewDay, idx);
         render();
       };
       row.appendChild(delBtn);
       content.appendChild(row);
     });
+  } else {
+    const nd0 = document.createElement('div');
+    nd0.className = 'rest-note';
+    nd0.textContent = 'Nothing logged yet for this day.';
+    content.appendChild(nd0);
   }
 
   const graphLabel = document.createElement('div');
