@@ -279,7 +279,8 @@ let state = {
   proteinPromptShown: false,
   proteinEntries: {},
   cycleStartDate: null,
-  autoBackupHistory: []
+  autoBackupHistory: [],
+  tutorialShown: false
 };
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -386,11 +387,162 @@ async function loadState() {
   render();
 }
 
+const tutorialSlides = [
+  {
+    title: 'Welcome to your program',
+    body: 'This app builds a full workout plan around your goal, tracks your weights and progress, and reminds you to check in along the way. Here is a quick look at what it can do.',
+    mock: '<div class="goal-screen" style="padding:16px;text-align:left;"><h2 style="font-size:16px;">What is your goal?</h2><div class="goal-btn" style="pointer-events:none;">Get Stronger<div class="desc">Push/Pull/Legs split focused on building strength</div></div><div class="goal-btn" style="pointer-events:none;">Glute and Strength Focus<div class="desc">Lower body split with priority progression</div></div></div>'
+  },
+  {
+    title: 'Pick a goal and length',
+    body: 'Choose a focus and a program length of 4, 8, or 12 weeks. You can always start a new program later without losing your history.',
+    mock: '<div class="goal-screen" style="padding:16px;text-align:left;"><h2 style="font-size:16px;">Choose a program length</h2><div class="goal-btn" style="pointer-events:none;">4 Weeks</div><div class="goal-btn" style="pointer-events:none;background:#1c1c1a;color:#fff;">8 Weeks</div><div class="goal-btn" style="pointer-events:none;">12 Weeks</div></div>'
+  },
+  {
+    title: 'Your day, laid out',
+    body: 'Each day shows your warm-up, exercises with weight tracking, and a cooldown. Check off each part as you go.',
+    mock: '<div style="padding:16px;"><div class="card"><p class="ex-name">Machine chest press</p><p class="ex-scheme">3 x 10</p><div class="weight-row"><label>This week</label><input type="number" placeholder="0" style="pointer-events:none;" disabled><span class="unit">lbs</span></div></div><div class="check-row" style="padding-top:0;border-top:none;"><input type="checkbox" disabled><label>Completed cardio warm-up</label></div></div>'
+  },
+  {
+    title: 'Swap what does not work',
+    body: 'Tap Swap on any exercise to pick an alternative that trains the same muscle group. You can also swap an entire day with another day if your schedule changes.',
+    mock: '<div style="padding:16px;"><div class="ex-top"><div><p class="ex-name">Leg press</p><p class="ex-scheme">3 x 12</p></div><div class="ex-actions"><button class="ex-btn" style="pointer-events:none;">Swap</button></div></div><button style="width:100%;padding:10px;background:#eef3fb;border:1px solid #b9cdf0;color:#1c3a7a;border-radius:10px;font-size:13px;font-weight:600;margin-top:14px;" disabled>Swap this day with another day</button></div>'
+  },
+  {
+    title: 'Track your checkpoints',
+    body: 'Log weight, waist, and hip measurements at the start and at key weeks. Each checkpoint has its own editable date, so it always matches when you actually measured.',
+    mock: '<div style="padding:16px;"><div class="checkpoint-card"><h3><span>Week 4</span></h3><div class="cp-row"><label>Weight</label><input type="text" placeholder="lbs" disabled></div><div class="cp-row"><label>Waist</label><input type="text" placeholder="inches" disabled></div></div></div>'
+  },
+  {
+    title: 'Keep an eye on protein',
+    body: 'Set a daily protein goal and log meals with quick-add presets or your own custom entries. You can look back at any day, not just today.',
+    mock: '<div style="padding:16px;"><div class="card"><p class="ex-name">Protein today</p><div style="font-size:28px;font-weight:800;margin:6px 0;">92<span style="font-size:14px;color:#999;font-weight:600;"> slash 150g</span></div><div style="background:#f0efe9;border-radius:20px;height:8px;overflow:hidden;"><div style="background:#e8722c;height:100%;width:61%;"></div></div></div></div>'
+  },
+  {
+    title: 'Your data stays backed up',
+    body: 'The app automatically keeps snapshots of your last few days, and you can download or copy a full backup anytime from the Progress tab.',
+    mock: '<div style="padding:16px;"><div class="backup-box"><h4>Back up your data</h4><p>Save a copy of your progress.</p><div class="backup-btn-row"><button class="backup-btn export" disabled>Download Backup</button><button class="backup-btn import" disabled>Copy as Text</button></div></div></div>'
+  },
+  {
+    title: 'You are ready to go',
+    body: 'You can replay this tutorial anytime from the Tutorial tab next to Progress. Good luck, and have fun with it.',
+    mock: ''
+  }
+];
+
+function showTutorial(onFinish) {
+  let step = 0;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-sheet';
+  sheet.style.cssText = 'border-radius:20px;max-height:85vh;width:92%;max-width:420px;margin:0 auto;';
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+
+  function renderSlide() {
+    const slide = tutorialSlides[step];
+    sheet.innerHTML = '';
+
+    const dots = document.createElement('div');
+    dots.style.cssText = 'display:flex;justify-content:center;gap:6px;margin-bottom:14px;';
+    tutorialSlides.forEach(function(s, i) {
+      const dot = document.createElement('div');
+      dot.style.cssText = 'width:6px;height:6px;border-radius:50%;background:' + (i === step ? '#e8722c' : '#e6e4dc') + ';';
+      dots.appendChild(dot);
+    });
+    sheet.appendChild(dots);
+
+    const h = document.createElement('h3');
+    h.style.cssText = 'text-align:center;margin-bottom:8px;';
+    h.textContent = slide.title;
+    sheet.appendChild(h);
+
+    const body = document.createElement('div');
+    body.className = 'modal-sub';
+    body.style.textAlign = 'center';
+    body.textContent = slide.body;
+    sheet.appendChild(body);
+
+    if (slide.mock) {
+      const mockWrap = document.createElement('div');
+      mockWrap.style.cssText = 'background:#f4f3ef;border-radius:14px;overflow:hidden;margin:14px 0;border:1px solid #e6e4dc;';
+      mockWrap.innerHTML = slide.mock;
+      sheet.appendChild(mockWrap);
+    }
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
+    if (step > 0) {
+      const backBtn = document.createElement('button');
+      backBtn.className = 'modal-close';
+      backBtn.style.cssText = 'flex:1;margin-top:0;';
+      backBtn.textContent = 'Back';
+      backBtn.onclick = function() {
+        step = step - 1;
+        renderSlide();
+      };
+      btnRow.appendChild(backBtn);
+    }
+    const nextBtn = document.createElement('button');
+    nextBtn.style.cssText = 'flex:2;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;';
+    nextBtn.textContent = (step === tutorialSlides.length - 1) ? 'Done' : 'Next';
+    nextBtn.onclick = function() {
+      if (step === tutorialSlides.length - 1) {
+        document.body.removeChild(overlay);
+        if (onFinish) { onFinish(); }
+      } else {
+        step = step + 1;
+        renderSlide();
+      }
+    };
+    btnRow.appendChild(nextBtn);
+    sheet.appendChild(btnRow);
+
+    if (step === 0) {
+      const skipBtn = document.createElement('button');
+      skipBtn.style.cssText = 'width:100%;padding:10px;background:none;border:none;color:#999;font-size:13px;text-decoration:underline;margin-top:10px;';
+      skipBtn.textContent = 'Skip tutorial';
+      skipBtn.onclick = function() {
+        document.body.removeChild(overlay);
+        if (onFinish) { onFinish(); }
+      };
+      sheet.appendChild(skipBtn);
+    }
+  }
+
+  renderSlide();
+}
+
+function renderTutorialTab(container) {
+  const wrap = document.createElement('div');
+  wrap.className = 'content';
+  const intro = document.createElement('div');
+  intro.className = 'banner';
+  intro.innerHTML = '<strong>App tutorial:</strong> a quick walkthrough of the main features.';
+  wrap.appendChild(intro);
+  const startBtn = document.createElement('button');
+  startBtn.textContent = 'Start Tutorial';
+  startBtn.style.cssText = 'width:100%;padding:14px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;';
+  startBtn.onclick = function() {
+    showTutorial(function() { render(); });
+  };
+  wrap.appendChild(startBtn);
+  container.appendChild(wrap);
+}
+
 function acceptDisclaimer() {
   state.disclaimerAccepted = true;
   state.disclaimerAcceptedDate = todayStr();
   saveState();
-  render();
+  if (!state.tutorialShown) {
+    state.tutorialShown = true;
+    saveState();
+    showTutorial(function() { render(); });
+  } else {
+    render();
+  }
 }
 
 function setProteinGoal(grams) {
@@ -735,14 +887,14 @@ function openDaySwapModal(sourceDayKey) {
       const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
       const sourceOwnDayName = dayKeyToName[sourceDayKey];
       const otherOwnDayName = dayKeyToName[otherKey];
-      const sourceTypePart = splitDayLabel(state.activePlan[sourceDayKey].label).typePart;
-      const otherTypePart = splitDayLabel(state.activePlan[otherKey].label).typePart;
       const sourceOldContent = Object.assign({}, state.activePlan[sourceDayKey]);
       const otherOldContent = Object.assign({}, state.activePlan[otherKey]);
+      const sourceOldType = splitDayLabel(sourceOldContent.label).typePart;
+      const otherOldType = splitDayLabel(otherOldContent.label).typePart;
       const newSourceContent = Object.assign({}, otherOldContent);
-      newSourceContent.label = sourceOwnDayName + ' ' + otherTypePart;
+      newSourceContent.label = sourceOwnDayName + ' ' + otherOldType;
       const newOtherContent = Object.assign({}, sourceOldContent);
-      newOtherContent.label = otherOwnDayName + ' ' + sourceTypePart;
+      newOtherContent.label = otherOwnDayName + ' ' + sourceOldType;
       state.activePlan[sourceDayKey] = newSourceContent;
       state.activePlan[otherKey] = newOtherContent;
       state.day = sourceDayKey;
@@ -1125,7 +1277,7 @@ function showTipModal(context) {
 }
 
 function deleteCycle(cycleNum) {
-  if (state.cycle === 1 && Object.keys(state.archivedCheckpoints || []).length === 0) {
+  if (state.cycle === 1 && (state.archivedCheckpoints || []).length === 0) {
     toast('Cannot delete the only cycle');
     return;
   }
@@ -1153,7 +1305,8 @@ function deleteCycle(cycleNum) {
   state.celebratedWeeks = (state.celebratedWeeks || []).filter(function(k) { return k.indexOf(cycleTag) !== 0; });
   state.celebratedCycles = (state.celebratedCycles || []).filter(function(k) { return k !== ('c' + cycleNum); });
 
-  if (cycleNum === state.checkpointsCycle || (cycleNum === state.cycle && !state.archivedCheckpoints.some(function(a){return a.cycle===cycleNum;}))) {
+  const cycleStillHasArchive = state.archivedCheckpoints.some(function(a) { return a.cycle === cycleNum; });
+  if (cycleNum === state.cycle && !cycleStillHasArchive) {
     state.checkpoints = { start: {}, week4: {}, week8: {} };
   }
 
@@ -1192,13 +1345,11 @@ function renderCycleManager(container) {
     row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #f0efe9;';
     const isCurrent = c === state.cycle;
     row.innerHTML = '<span style="font-size:13px;">Cycle ' + c + (isCurrent ? ' (current)' : '') + '</span>';
-    if (state.cycle > 1) {
-      const delBtn = document.createElement('button');
-      delBtn.textContent = 'Delete';
-      delBtn.style.cssText = 'font-size:12px;font-weight:700;padding:6px 10px;background:#fdf0e6;color:#a11c56;border:1px solid #f0cba4;border-radius:8px;';
-      delBtn.onclick = function() { deleteCycle(c); };
-      row.appendChild(delBtn);
-    }
+    const delBtn = document.createElement('button');
+    delBtn.textContent = 'Delete';
+    delBtn.style.cssText = 'font-size:12px;font-weight:700;padding:6px 10px;background:#fdf0e6;color:#a11c56;border:1px solid #f0cba4;border-radius:8px;';
+    delBtn.onclick = (function(cNum) { return function() { deleteCycle(cNum); }; })(c);
+    row.appendChild(delBtn);
     wrap.appendChild(row);
   }
   container.appendChild(wrap);
@@ -1603,7 +1754,7 @@ function renderCheckpointsScreen(container) {
   if (!state.cycleStartDate) {
     const backfillCard = document.createElement('div');
     backfillCard.className = 'card';
-    backfillCard.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Set this cycle\u2019s start date</p><p class="ex-scheme" style="margin-bottom:10px;">This cycle started before dates were tracked. Set the date you began this cycle so Week 4 and Week 8 dates can be calculated.</p>';
+    backfillCard.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Set this cycle start date</p><p class="ex-scheme" style="margin-bottom:10px;">This cycle started before dates were tracked. Set the date you began this cycle so Week 4 and Week 8 dates can be calculated.</p>';
     const dateInput = document.createElement('input');
     dateInput.type = 'date';
     dateInput.style.cssText = 'width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:10px;';
@@ -2005,58 +2156,6 @@ function renderProteinScreen(container) {
   container.appendChild(content);
 }
 
-function renderDebugScreen(container) {
-  const content = document.createElement('div');
-  content.className = 'content';
-  const backBtn = document.createElement('button');
-  backBtn.textContent = 'Back';
-  backBtn.style.cssText = 'padding:8px 14px;background:#f0efe9;border:none;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:14px;';
-  backBtn.onclick = function() { state.screen = 'day'; saveState(); render(); };
-  content.appendChild(backBtn);
-  const intro = document.createElement('div');
-  intro.className = 'banner';
-  intro.innerHTML = '<strong>Storage check:</strong> everything saved on this phone right now.';
-  content.appendChild(intro);
-  const summaryCard = document.createElement('div');
-  summaryCard.className = 'progress-ex-card';
-  let summaryHtml = '<h4>Current app state</h4>';
-  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Current cycle: <strong>' + state.cycle + '</strong></div>';
-  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Current week: <strong>' + state.week + '</strong></div>';
-  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Goal: <strong>' + (state.goal || 'none set') + '</strong></div>';
-  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Program length: <strong>' + (state.programLength || 'none') + '</strong></div>';
-  summaryHtml += '<div style="font-size:13px;padding:4px 0;">Total weight entries stored: <strong>' + Object.keys(state.weights).length + '</strong></div>';
-  summaryCard.innerHTML = summaryHtml;
-  content.appendChild(summaryCard);
-  const entriesCard = document.createElement('div');
-  entriesCard.className = 'progress-ex-card';
-  let entriesHtml = '<h4>All logged weight entries</h4>';
-  const keys = Object.keys(state.weights);
-  if (keys.length === 0) { entriesHtml += '<p style="font-size:13px;">No entries found.</p>'; }
-  else {
-    keys.sort().forEach(function(k) {
-      const v = state.weights[k];
-      entriesHtml += '<div style="font-size:11px;padding:3px 0;border-top:1px solid #f0efe9;">' + k + ' &rarr; ' + JSON.stringify(v) + '</div>';
-    });
-  }
-  entriesCard.innerHTML = entriesHtml;
-  content.appendChild(entriesCard);
-  const allKeysCard = document.createElement('div');
-  allKeysCard.className = 'progress-ex-card';
-  let html = '<h4>All localStorage keys on this site</h4>';
-  if (localStorage.length === 0) { html += '<p style="font-size:13px;">No keys found at all.</p>'; }
-  else {
-    html += '<p style="font-size:13px;">Found ' + localStorage.length + ' key(s):</p>';
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      const v = localStorage.getItem(k);
-      html += '<div style="font-size:12px;padding:4px 0;border-top:1px solid #f0efe9;"><strong>' + k + '</strong> (' + (v ? v.length : 0) + ' chars)</div>';
-    }
-  }
-  allKeysCard.innerHTML = html;
-  content.appendChild(allKeysCard);
-  container.appendChild(content);
-}
-
 function renderDayTabs(container) {
   const dt = document.createElement('div');
   dt.className = 'day-tabs';
@@ -2095,6 +2194,15 @@ function renderDayTabs(container) {
     render();
   };
   dt.appendChild(pb);
+  const tb = document.createElement('button');
+  tb.className = 'day-tab' + (state.screen === 'tutorial' ? ' active' : '');
+  tb.textContent = 'Tutorial';
+  tb.onclick = function() {
+    state.screen = state.screen === 'tutorial' ? 'day' : 'tutorial';
+    saveState();
+    render();
+  };
+  dt.appendChild(tb);
   container.appendChild(dt);
 }
 
@@ -2165,7 +2273,7 @@ function render() {
   if (state.screen === 'checkpoints') { renderCheckpointsScreen(app); }
   else if (state.screen === 'progress') { renderProgressScreen(app); }
   else if (state.screen === 'protein') { renderProteinScreen(app); }
-  else if (state.screen === 'debug') { renderDebugScreen(app); }
+  else if (state.screen === 'tutorial') { renderTutorialTab(app); }
   else { renderDayContent(app); }
 }
 
