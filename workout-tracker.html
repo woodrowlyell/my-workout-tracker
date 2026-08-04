@@ -156,6 +156,20 @@ function getOrderedDayKeys() {
   return DAY_ORDER.filter(function(d) { return keys.indexOf(d) !== -1; });
 }
 
+function weekOverrideKey(cycle, week) {
+  return 'c' + cycle + '-w' + week;
+}
+
+function getEffectiveDay(dayKey, cycle, week) {
+  const c = cycle !== undefined ? cycle : state.viewingCycle;
+  const w = week !== undefined ? week : state.week;
+  const ovKey = weekOverrideKey(c, w);
+  if (state.weeklyOverrides && state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dayKey]) {
+    return state.weeklyOverrides[ovKey][dayKey];
+  }
+  return state.activePlan[dayKey];
+}
+
 let state = {
   screen: 'select_goal',
   disclaimerAccepted: false,
@@ -189,7 +203,8 @@ let state = {
   tutorialShown: false,
   onboarding: null,
   programRecoveryPref: null,
-  programPriority: null
+  programPriority: null,
+  weeklyOverrides: {}
 };
 
 const onboardingSteps = [
@@ -1368,39 +1383,107 @@ function splitDayLabel(label) {
   return { dayPart: '', typePart: label };
 }
 
+function showScheduleChangeChoiceModal(onThisWeek, onAllFuture) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-sheet';
+  sheet.style.cssText = 'border-radius:20px;max-width:400px;margin:0 auto;';
+  sheet.innerHTML = '<h3>Workout Schedule Change</h3><div class="modal-sub">You changed the scheduled workout day. How would you like to apply this change?</div>';
+
+  const thisWeekBtn = document.createElement('button');
+  thisWeekBtn.className = 'goal-btn';
+  thisWeekBtn.style.cssText = 'background:#1c1c1a;color:#fff;border-color:#1c1c1a;text-align:center;';
+  thisWeekBtn.innerHTML = 'This Week Only<div class="desc" style="color:#ccc;">Default \u2014 future weeks stay on the original schedule</div>';
+  thisWeekBtn.onclick = function() { document.body.removeChild(overlay); onThisWeek(); };
+  sheet.appendChild(thisWeekBtn);
+
+  const allFutureBtn = document.createElement('button');
+  allFutureBtn.className = 'goal-btn';
+  allFutureBtn.style.cssText = 'text-align:center;';
+  allFutureBtn.innerHTML = 'All Future Weeks<div class="desc">Permanently changes the schedule going forward</div>';
+  allFutureBtn.onclick = function() { document.body.removeChild(overlay); onAllFuture(); };
+  sheet.appendChild(allFutureBtn);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'modal-close';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function() { document.body.removeChild(overlay); };
+  sheet.appendChild(cancelBtn);
+
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+}
+
+function applyDaySwapThisWeekOnly(sourceDayKey, otherKey) {
+  const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
+  const sourceOwnDayName = dayKeyToName[sourceDayKey];
+  const otherOwnDayName = dayKeyToName[otherKey];
+  const sourceCurrent = getEffectiveDay(sourceDayKey);
+  const otherCurrent = getEffectiveDay(otherKey);
+  const sourceType = splitDayLabel(sourceCurrent.label).typePart;
+  const otherType = splitDayLabel(otherCurrent.label).typePart;
+
+  const newSourceContent = Object.assign({}, otherCurrent);
+  newSourceContent.label = sourceOwnDayName + ' ' + otherType;
+  const newOtherContent = Object.assign({}, sourceCurrent);
+  newOtherContent.label = otherOwnDayName + ' ' + sourceType;
+
+  const ovKey = weekOverrideKey(state.viewingCycle, state.week);
+  if (!state.weeklyOverrides) state.weeklyOverrides = {};
+  if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
+  state.weeklyOverrides[ovKey][sourceDayKey] = newSourceContent;
+  state.weeklyOverrides[ovKey][otherKey] = newOtherContent;
+  state.day = sourceDayKey;
+  saveState();
+  render();
+  toast('Swapped for this week only');
+}
+
+function applyDaySwapAllFutureWeeks(sourceDayKey, otherKey) {
+  const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
+  const sourceOwnDayName = dayKeyToName[sourceDayKey];
+  const otherOwnDayName = dayKeyToName[otherKey];
+  const sourceOldContent = Object.assign({}, state.activePlan[sourceDayKey]);
+  const otherOldContent = Object.assign({}, state.activePlan[otherKey]);
+  const sourceOldType = splitDayLabel(sourceOldContent.label).typePart;
+  const otherOldType = splitDayLabel(otherOldContent.label).typePart;
+  const newSourceContent = Object.assign({}, otherOldContent);
+  newSourceContent.label = sourceOwnDayName + ' ' + otherOldType;
+  const newOtherContent = Object.assign({}, sourceOldContent);
+  newOtherContent.label = otherOwnDayName + ' ' + sourceOldType;
+  state.activePlan[sourceDayKey] = newSourceContent;
+  state.activePlan[otherKey] = newOtherContent;
+  state.day = sourceDayKey;
+  saveState();
+  render();
+  toast('Workouts swapped going forward');
+}
+
 function openDaySwapModal(sourceDayKey) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
-  sheet.innerHTML = '<h3>Swap ' + state.activePlan[sourceDayKey].label + '</h3><div class="modal-sub">The workout type moves to the other day, but each day keeps its own name</div>';
+  sheet.innerHTML = '<h3>Swap ' + getEffectiveDay(sourceDayKey).label + '</h3><div class="modal-sub">The workout type moves to the other day, but each day keeps its own name</div>';
   getOrderedDayKeys().forEach(function(otherKey) {
     if (otherKey === sourceDayKey) return;
     const opt = document.createElement('div');
     opt.className = 'swap-option';
     const optName = document.createElement('div');
     optName.className = 'swap-option-name';
-    optName.textContent = state.activePlan[otherKey].label;
+    optName.textContent = getEffectiveDay(otherKey).label;
     opt.appendChild(optName);
     const swapBtn = document.createElement('button');
     swapBtn.className = 'swap-btn permanent';
     swapBtn.textContent = 'Swap';
     swapBtn.onclick = function() {
-      const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
-      const sourceOwnDayName = dayKeyToName[sourceDayKey];
-      const otherOwnDayName = dayKeyToName[otherKey];
-      const sourceOldContent = Object.assign({}, state.activePlan[sourceDayKey]);
-      const otherOldContent = Object.assign({}, state.activePlan[otherKey]);
-      const sourceOldType = splitDayLabel(sourceOldContent.label).typePart;
-      const otherOldType = splitDayLabel(otherOldContent.label).typePart;
-      const newSourceContent = Object.assign({}, otherOldContent);
-      newSourceContent.label = sourceOwnDayName + ' ' + otherOldType;
-      const newOtherContent = Object.assign({}, sourceOldContent);
-      newOtherContent.label = otherOwnDayName + ' ' + sourceOldType;
-      state.activePlan[sourceDayKey] = newSourceContent;
-      state.activePlan[otherKey] = newOtherContent;
-      state.day = sourceDayKey;
-      saveState(); document.body.removeChild(overlay); render(); toast('Workouts swapped');
+      document.body.removeChild(overlay);
+      showScheduleChangeChoiceModal(
+        function() { applyDaySwapThisWeekOnly(sourceDayKey, otherKey); },
+        function() { applyDaySwapAllFutureWeeks(sourceDayKey, otherKey); }
+      );
     };
     opt.appendChild(swapBtn);
     sheet.appendChild(opt);
@@ -2156,7 +2239,7 @@ function renderDayContent(container) {
     recoveryBanner.textContent = 'This is typically a lighter week. Consider trimming a set or two, or using a lighter weight, if you are feeling fatigued.';
     content.appendChild(recoveryBanner);
   }
-  const day = state.activePlan[state.day];
+  const day = getEffectiveDay(state.day);
   if (day.rest) {
     const banner = document.createElement('div');
     banner.className = 'rest-note';
@@ -2715,7 +2798,7 @@ function renderDayTabs(container) {
     const opt = document.createElement('option');
     opt.value = key;
     const check = isDayComplete(key, state.week) ? ' (Done)' : '';
-    opt.textContent = state.activePlan[key].label + check;
+    opt.textContent = getEffectiveDay(key).label + check;
     if (state.day === key && state.screen === 'day') opt.selected = true;
     daySelect.appendChild(opt);
   });
