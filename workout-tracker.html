@@ -553,10 +553,35 @@ function substituteIfAvoided(exId, avoidList, equipment) {
   return candidates.length > 0 ? candidates[0] : exId;
 }
 
-function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset) {
-  const muscleKeys = Object.keys(musclePool);
+const muscleToUpperLowerCategory = {
+  chest: 'upper', shoulders: 'upper', triceps: 'upper', back: 'upper', biceps: 'upper', core: 'upper',
+  legs_posterior: 'lower', legs_general: 'lower', legs_quad: 'lower', calves: 'lower'
+};
+
+const muscleToPplCategory = {
+  chest: 'push', shoulders: 'push', triceps: 'push', core: 'push',
+  back: 'pull', biceps: 'pull',
+  legs_posterior: 'legs', legs_general: 'legs', legs_quad: 'legs', calves: 'legs'
+};
+
+function filterPoolForDayType(musclePool, dayLabelType, effectiveSplit) {
+  if (effectiveSplit === 'full_body') return musclePool;
+  const categoryMap = effectiveSplit === 'ppl' ? muscleToPplCategory : muscleToUpperLowerCategory;
+  const dayTypeLower = dayLabelType.toLowerCase();
+  const filtered = {};
+  Object.keys(musclePool).forEach(function(muscle) {
+    const category = categoryMap[muscle];
+    if (!category || category === dayTypeLower) filtered[muscle] = musclePool[muscle];
+  });
+  if (Object.keys(filtered).length === 0) return musclePool;
+  return filtered;
+}
+
+function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset, effectiveSplit) {
+  const filteredPool = filterPoolForDayType(musclePool, dayLabelType, effectiveSplit);
+  const muscleKeys = Object.keys(filteredPool);
   const flatList = [];
-  muscleKeys.forEach(function(m) { musclePool[m].forEach(function(exId) { flatList.push(exId); }); });
+  muscleKeys.forEach(function(m) { filteredPool[m].forEach(function(exId) { flatList.push(exId); }); });
   const uniqueList = flatList.filter(function(v, i) { return flatList.indexOf(v) === i; });
   const rotated = uniqueList.slice(rotationOffset).concat(uniqueList.slice(0, rotationOffset));
   const chosen = [];
@@ -623,7 +648,7 @@ function generatePersonalizedProgram() {
         stepsGoal: '8,000+'
       };
     } else {
-      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout);
+      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout, effective.split);
     }
   });
 
