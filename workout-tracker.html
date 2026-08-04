@@ -1416,6 +1416,41 @@ function showScheduleChangeChoiceModal(onThisWeek, onAllFuture) {
   document.body.appendChild(overlay);
 }
 
+function swapWeekDataBetweenDays(sourceDayKey, otherDayKey, cycle, week) {
+  const suffix = '::c' + cycle + '::w' + week;
+  function remapExId(exId, fromDay, toDay) {
+    return exId.split(fromDay).join(toDay);
+  }
+  const toMove = [];
+  Object.keys(state.weights).forEach(function(k) {
+    if (k.indexOf(suffix) !== k.length - suffix.length) return;
+    const parts = k.split('::');
+    const dayKey = parts[0];
+    if (dayKey === sourceDayKey) {
+      const newExId = remapExId(parts[1], sourceDayKey, otherDayKey);
+      toMove.push({ oldKey: k, newKey: [otherDayKey, newExId, parts[2], parts[3]].join('::') });
+    } else if (dayKey === otherDayKey) {
+      const newExId = remapExId(parts[1], otherDayKey, sourceDayKey);
+      toMove.push({ oldKey: k, newKey: [sourceDayKey, newExId, parts[2], parts[3]].join('::') });
+    }
+  });
+  const savedValues = toMove.map(function(m) { return state.weights[m.oldKey]; });
+  toMove.forEach(function(m) { delete state.weights[m.oldKey]; });
+  toMove.forEach(function(m, i) { state.weights[m.newKey] = savedValues[i]; });
+
+  const proteinSuffix = '::c' + cycle + '::w' + week;
+  const proteinToMove = [];
+  Object.keys(state.proteinEntries).forEach(function(k) {
+    if (k.indexOf(proteinSuffix) !== k.length - proteinSuffix.length) return;
+    const dayKey = k.split('::')[0];
+    if (dayKey === sourceDayKey) proteinToMove.push({ oldKey: k, newKey: otherDayKey + proteinSuffix });
+    else if (dayKey === otherDayKey) proteinToMove.push({ oldKey: k, newKey: sourceDayKey + proteinSuffix });
+  });
+  const savedProtein = proteinToMove.map(function(m) { return state.proteinEntries[m.oldKey]; });
+  proteinToMove.forEach(function(m) { delete state.proteinEntries[m.oldKey]; });
+  proteinToMove.forEach(function(m, i) { state.proteinEntries[m.newKey] = savedProtein[i]; });
+}
+
 function applyDaySwapThisWeekOnly(sourceDayKey, otherKey) {
   const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
   const sourceOwnDayName = dayKeyToName[sourceDayKey];
@@ -1435,6 +1470,9 @@ function applyDaySwapThisWeekOnly(sourceDayKey, otherKey) {
   if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
   state.weeklyOverrides[ovKey][sourceDayKey] = newSourceContent;
   state.weeklyOverrides[ovKey][otherKey] = newOtherContent;
+
+  swapWeekDataBetweenDays(sourceDayKey, otherKey, state.viewingCycle, state.week);
+
   state.day = sourceDayKey;
   saveState();
   render();
@@ -1455,6 +1493,9 @@ function applyDaySwapAllFutureWeeks(sourceDayKey, otherKey) {
   newOtherContent.label = otherOwnDayName + ' ' + sourceOldType;
   state.activePlan[sourceDayKey] = newSourceContent;
   state.activePlan[otherKey] = newOtherContent;
+
+  swapWeekDataBetweenDays(sourceDayKey, otherKey, state.viewingCycle, state.week);
+
   state.day = sourceDayKey;
   saveState();
   render();
