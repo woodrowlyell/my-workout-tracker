@@ -527,7 +527,15 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
   const key = buildPlanKey(8, goalKey, subgoalKey) || buildPlanKey(8, goalKey, null);
   const template = programLibrary[key] || programLibrary[buildPlanKey(4, goalKey, subgoalKey)] || programLibrary[buildPlanKey(12, goalKey, subgoalKey)];
   const muscles = {};
-  if (!template) return muscles;
+  if (!template) {
+    Object.keys(exerciseLibrary).forEach(function(exId) {
+      const m = exerciseLibrary[exId].muscle;
+      if (m === 'cardio' || m === 'yoga') return;
+      if (!muscles[m]) muscles[m] = [];
+      muscles[m].push(exId);
+    });
+    return muscles;
+  }
   Object.keys(template.days).forEach(function(dk) {
     const day = template.days[dk];
     if (day.rest || !day.exerciseIds) return;
@@ -538,6 +546,14 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
       if (muscles[m].indexOf(exId) === -1) muscles[m].push(exId);
     });
   });
+  if (Object.keys(muscles).length === 0) {
+    Object.keys(exerciseLibrary).forEach(function(exId) {
+      const m = exerciseLibrary[exId].muscle;
+      if (m === 'cardio' || m === 'yoga') return;
+      if (!muscles[m]) muscles[m] = [];
+      muscles[m].push(exId);
+    });
+  }
   return muscles;
 }
 
@@ -1310,6 +1326,7 @@ function isDayComplete(dayKey, week) {
   if (!mob || !mob.done) return false;
   const cardio = getEntry(dayKey, '__cardio_' + dayKey + '__', week);
   if (!cardio || !cardio.done) return false;
+  if (!day.exerciseIds || day.exerciseIds.length === 0) return true;
   for (let i = 0; i < day.exerciseIds.length; i++) {
     const exId = day.exerciseIds[i];
     const ex = exerciseLibrary[exId];
@@ -2390,7 +2407,7 @@ function renderDayContent(container) {
   exLabel.className = 'section-label';
   exLabel.textContent = 'Exercises';
   content.appendChild(exLabel);
-  day.exerciseIds.forEach(function(exId, idx) { content.appendChild(renderExerciseCard(state.day, exId, idx)); });
+  (day.exerciseIds || []).forEach(function(exId, idx) { content.appendChild(renderExerciseCard(state.day, exId, idx)); });
   if (day.finisherId) {
     const finLabel = document.createElement('div');
     finLabel.className = 'section-label';
