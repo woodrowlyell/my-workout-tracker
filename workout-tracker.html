@@ -1270,7 +1270,7 @@ function getAllProteinTotals() {
 }
 
 function isDayComplete(dayKey, week) {
-  const day = state.activePlan[dayKey];
+  const day = getEffectiveDay(dayKey, undefined, week);
   if (!day) return false;
   if (day.rest) {
     const e = getEntry(dayKey, '__rest_' + dayKey + '__', week);
@@ -1461,6 +1461,29 @@ function applyDaySwapAllFutureWeeks(sourceDayKey, otherKey) {
   toast('Workouts swapped going forward');
 }
 
+function showCompletedDayWarning(dayLabel, onProceed) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-sheet';
+  sheet.style.cssText = 'border-radius:20px;max-width:400px;margin:0 auto;';
+  sheet.innerHTML = '<h3>Heads up</h3><div class="modal-sub">' + dayLabel + ' is already marked complete this week. Swapping it will not change any of your logged data, but the day label and exercise list will move. Continue?</div>';
+  const proceedBtn = document.createElement('button');
+  proceedBtn.className = 'goal-btn';
+  proceedBtn.style.cssText = 'background:#1c1c1a;color:#fff;border-color:#1c1c1a;text-align:center;';
+  proceedBtn.textContent = 'Continue';
+  proceedBtn.onclick = function() { document.body.removeChild(overlay); onProceed(); };
+  sheet.appendChild(proceedBtn);
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'modal-close';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function() { document.body.removeChild(overlay); };
+  sheet.appendChild(cancelBtn);
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+}
+
 function openDaySwapModal(sourceDayKey) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -1480,10 +1503,20 @@ function openDaySwapModal(sourceDayKey) {
     swapBtn.textContent = 'Swap';
     swapBtn.onclick = function() {
       document.body.removeChild(overlay);
-      showScheduleChangeChoiceModal(
-        function() { applyDaySwapThisWeekOnly(sourceDayKey, otherKey); },
-        function() { applyDaySwapAllFutureWeeks(sourceDayKey, otherKey); }
-      );
+      const proceedToChoice = function() {
+        showScheduleChangeChoiceModal(
+          function() { applyDaySwapThisWeekOnly(sourceDayKey, otherKey); },
+          function() { applyDaySwapAllFutureWeeks(sourceDayKey, otherKey); }
+        );
+      };
+      const sourceComplete = isDayComplete(sourceDayKey, state.week);
+      const otherComplete = isDayComplete(otherKey, state.week);
+      if (sourceComplete || otherComplete) {
+        const completedLabel = sourceComplete ? getEffectiveDay(sourceDayKey).label : getEffectiveDay(otherKey).label;
+        showCompletedDayWarning(completedLabel, proceedToChoice);
+      } else {
+        proceedToChoice();
+      }
     };
     opt.appendChild(swapBtn);
     sheet.appendChild(opt);
