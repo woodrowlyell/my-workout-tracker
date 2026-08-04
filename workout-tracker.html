@@ -192,21 +192,6 @@ let state = {
 
 const onboardingSteps = [
   {
-    key: 'primaryGoal',
-    title: 'What is your primary goal?',
-    sub: 'Choose one. This drives the overall design of your program.',
-    multi: false,
-    max: 1,
-    options: [
-      { value: 'lose_fat', label: 'Lose Body Fat' },
-      { value: 'build_muscle', label: 'Build Muscle' },
-      { value: 'build_strength', label: 'Build Strength' },
-      { value: 'athletic_performance', label: 'Improve Athletic Performance' },
-      { value: 'general_fitness', label: 'Improve General Fitness & Health' },
-      { value: 'yoga_mobility', label: 'Yoga & Mobility' }
-    ]
-  },
-  {
     key: 'secondaryFocus',
     title: 'Any secondary focus areas?',
     sub: 'Choose up to two. These enhance your primary goal without replacing it.',
@@ -346,8 +331,8 @@ const onboardingSteps = [
   }
 ];
 
-function startGuidedOnboarding() {
-  state.onboarding = { stepIndex: 0, answers: {} };
+function startGuidedOnboarding(goalKey, subgoalKey) {
+  state.onboarding = { stepIndex: 0, answers: {}, goalKey: goalKey, subgoalKey: subgoalKey || null };
   state.screen = 'onboarding';
   saveState();
   render();
@@ -397,8 +382,13 @@ function onboardingBack() {
     saveState();
     render();
   } else {
-    state.screen = 'select_goal';
+    const goalKey = state.onboarding.goalKey;
     state.onboarding = null;
+    if (goalKey && goalTemplates[goalKey] && goalTemplates[goalKey].subgoals) {
+      state.screen = 'select_subgoal';
+    } else {
+      state.screen = 'select_goal';
+    }
     saveState();
     render();
   }
@@ -504,7 +494,7 @@ function estimateCompletionDate(weeks) {
 
 function buildProgramHighlights(answers) {
   const highlights = [];
-  const goalLabel = optionLabelLookups.primaryGoal[answers.primaryGoal];
+  const goalLabel = goalTemplates[state.onboarding.goalKey] ? goalTemplates[state.onboarding.goalKey].label : '';
   highlights.push('Built around ' + goalLabel);
   if (answers.secondaryFocus && answers.secondaryFocus.length > 0) {
     const foci = answers.secondaryFocus.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
@@ -535,8 +525,12 @@ function renderOnboardingSummary() {
   const card = document.createElement('div');
   card.className = 'card';
   card.style.cssText = 'text-align:left;';
+  const goalTmpl = goalTemplates[state.onboarding.goalKey];
+  const goalRowLabel = state.onboarding.subgoalKey && goalTmpl.subgoalLabels
+    ? goalTmpl.label + ' \u2014 ' + goalTmpl.subgoalLabels[state.onboarding.subgoalKey]
+    : goalTmpl.label;
   const rows = [
-    ['Primary Goal', optionLabelLookups.primaryGoal[answers.primaryGoal]],
+    ['Program', goalRowLabel],
     ['Secondary Focus', (answers.secondaryFocus && answers.secondaryFocus.length > 0) ? answers.secondaryFocus.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(', ') : 'None'],
     ['Experience', optionLabelLookups.experience[answers.experience]],
     ['Frequency', answers.frequency + ' days per week'],
@@ -952,17 +946,13 @@ function renderProteinGoalSetup() {
 function chooseGoalTop(goalKey) {
   state.selectedGoal = goalKey;
   const tmpl = goalTemplates[goalKey];
-  if (tmpl.subgoals) { state.screen = 'select_subgoal'; }
-  else { state.selectedSubgoal = null; state.screen = 'select_length'; }
-  saveState();
-  render();
+  if (tmpl.subgoals) { state.screen = 'select_subgoal'; saveState(); render(); }
+  else { state.selectedSubgoal = null; startGuidedOnboarding(goalKey, null); }
 }
 
 function chooseSubgoal(subgoalKey) {
   state.selectedSubgoal = subgoalKey;
-  state.screen = 'select_length';
-  saveState();
-  render();
+  startGuidedOnboarding(state.selectedGoal, subgoalKey);
 }
 
 function chooseLength(len) {
@@ -1756,19 +1746,7 @@ function renderGoalSelect() {
   app.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'goal-screen';
-  wrap.innerHTML = '<h2>What is your goal?</h2><p>Answer a few quick questions and we will build a personalized program, or pick a ready-made template below.</p>';
-
-  const guidedBtn = document.createElement('button');
-  guidedBtn.className = 'goal-btn';
-  guidedBtn.style.cssText = 'background:#1c1c1a;color:#fff;border-color:#1c1c1a;';
-  guidedBtn.innerHTML = 'Build My Personalized Program<div class="desc" style="color:#ccc;">Answer 11 quick questions, takes about 2 minutes</div>';
-  guidedBtn.onclick = startGuidedOnboarding;
-  wrap.appendChild(guidedBtn);
-
-  const divider = document.createElement('div');
-  divider.style.cssText = 'text-align:center;color:#999;font-size:12px;margin:16px 0;';
-  divider.textContent = 'OR CHOOSE A TEMPLATE';
-  wrap.appendChild(divider);
+  wrap.innerHTML = '<h2>What is your goal?</h2><p>Pick a starting point. We will ask a few quick follow-up questions to personalize it, then build your program.</p>';
 
   Object.keys(goalTemplates).forEach(function(key) {
     const btn = document.createElement('button');
