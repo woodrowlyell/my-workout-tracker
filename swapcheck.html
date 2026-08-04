@@ -1,1 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: monospace; padding: 16px; background: #f4f3ef; font-size: 13px; }
+  h2 { font-size: 16px; }
+  .block { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 14px; white-space: pre-wrap; word-break: break-all; }
+  .label { font-weight: bold; color: #1c3a7a; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<h2>Swap Diagnostic (read-only)</h2>
+<div id="output">Loading...</div>
+<script>
+try {
+  const raw = localStorage.getItem('workout-state-v3');
+  if (!raw) {
+    document.getElementById('output').textContent = 'No workout-state-v3 found at this origin.';
+  } else {
+    const state = JSON.parse(raw);
+    let html = '';
 
+    html += '<div class="block"><div class="label">Current viewingCycle / week / day</div>' +
+      'viewingCycle: ' + state.viewingCycle + '\nweek: ' + state.week + '\nday: ' + state.day + '</div>';
+
+    html += '<div class="block"><div class="label">state.activePlan.mon (base)</div>' +
+      JSON.stringify(state.activePlan && state.activePlan.mon, null, 2) + '</div>';
+
+    html += '<div class="block"><div class="label">state.activePlan.tue (base)</div>' +
+      JSON.stringify(state.activePlan && state.activePlan.tue, null, 2) + '</div>';
+
+    const ovKey = 'c' + state.viewingCycle + '-w' + state.week;
+    html += '<div class="block"><div class="label">weeklyOverrides["' + ovKey + '"]</div>' +
+      JSON.stringify(state.weeklyOverrides && state.weeklyOverrides[ovKey], null, 2) + '</div>';
+
+    html += '<div class="block"><div class="label">ALL weeklyOverrides keys present</div>' +
+      JSON.stringify(Object.keys(state.weeklyOverrides || {})) + '</div>';
+
+    const weightKeysThisWeek = Object.keys(state.weights || {}).filter(function(k) {
+      return k.indexOf('::c' + state.viewingCycle + '::w' + state.week) !== -1;
+    });
+    html += '<div class="block"><div class="label">state.weights keys for this cycle/week (' + weightKeysThisWeek.length + ' found)</div>';
+    weightKeysThisWeek.forEach(function(k) {
+      html += k + ' => ' + JSON.stringify(state.weights[k]) + '\n';
+    });
+    html += '</div>';
+
+    document.getElementById('output').innerHTML = html;
+  }
+} catch (e) {
+  document.getElementById('output').textContent = 'Error reading storage: ' + e.message;
+}
+</script>
+</body>
+</html>
