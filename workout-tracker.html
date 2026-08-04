@@ -186,8 +186,419 @@ let state = {
   proteinEntries: {},
   cycleStartDate: null,
   autoBackupHistory: [],
-  tutorialShown: false
+  tutorialShown: false,
+  onboarding: null
 };
+
+const onboardingSteps = [
+  {
+    key: 'primaryGoal',
+    title: 'What is your primary goal?',
+    sub: 'Choose one. This drives the overall design of your program.',
+    multi: false,
+    max: 1,
+    options: [
+      { value: 'lose_fat', label: 'Lose Body Fat' },
+      { value: 'build_muscle', label: 'Build Muscle' },
+      { value: 'build_strength', label: 'Build Strength' },
+      { value: 'athletic_performance', label: 'Improve Athletic Performance' },
+      { value: 'general_fitness', label: 'Improve General Fitness & Health' },
+      { value: 'yoga_mobility', label: 'Yoga & Mobility' }
+    ]
+  },
+  {
+    key: 'secondaryFocus',
+    title: 'Any secondary focus areas?',
+    sub: 'Choose up to two. These enhance your primary goal without replacing it.',
+    multi: true,
+    max: 2,
+    options: [
+      { value: 'bigger_arms', label: 'Bigger Arms' },
+      { value: 'bigger_chest', label: 'Bigger Chest' },
+      { value: 'bigger_shoulders', label: 'Bigger Shoulders' },
+      { value: 'stronger_legs', label: 'Stronger Legs' },
+      { value: 'stronger_core', label: 'Stronger Core' },
+      { value: 'better_posture', label: 'Better Posture' },
+      { value: 'shoulder_health', label: 'Improve Shoulder Health' },
+      { value: 'grip_strength', label: 'Increase Grip Strength' },
+      { value: 'mobility', label: 'Improve Mobility' },
+      { value: 'cardio_endurance', label: 'Better Cardiovascular Endurance' }
+    ]
+  },
+  {
+    key: 'experience',
+    title: 'What is your experience level?',
+    sub: null,
+    multi: false,
+    max: 1,
+    options: [
+      { value: 'beginner', label: 'Beginner' },
+      { value: 'intermediate', label: 'Intermediate' },
+      { value: 'advanced', label: 'Advanced' }
+    ]
+  },
+  {
+    key: 'frequency',
+    title: 'How many days per week can you work out?',
+    sub: null,
+    multi: false,
+    max: 1,
+    options: [
+      { value: 2, label: '2 Days' },
+      { value: 3, label: '3 Days' },
+      { value: 4, label: '4 Days' },
+      { value: 5, label: '5 Days' },
+      { value: 6, label: '6 Days' }
+    ]
+  },
+  {
+    key: 'duration',
+    title: 'How long should each workout be?',
+    sub: 'This is a real time budget. It changes how many exercises fit in your session.',
+    multi: false,
+    max: 1,
+    options: [
+      { value: 30, label: '30 Minutes' },
+      { value: 45, label: '45 Minutes' },
+      { value: 60, label: '60 Minutes' },
+      { value: 75, label: '75+ Minutes' }
+    ]
+  },
+  {
+    key: 'equipment',
+    title: 'What equipment do you have access to?',
+    sub: null,
+    multi: false,
+    max: 1,
+    options: [
+      { value: 'planet_fitness', label: 'Planet Fitness' },
+      { value: 'full_gym', label: 'Full Commercial Gym' },
+      { value: 'home_gym', label: 'Home Gym' },
+      { value: 'dumbbells_only', label: 'Dumbbells Only' },
+      { value: 'bodyweight_only', label: 'Bodyweight Only' }
+    ]
+  },
+  {
+    key: 'avoidExercises',
+    title: 'Any exercises you want to avoid?',
+    sub: 'Choose any that apply. We will substitute similar exercises whenever possible.',
+    multi: true,
+    max: 99,
+    options: [
+      { value: 'deadlifts', label: 'Deadlifts' },
+      { value: 'squats', label: 'Squats' },
+      { value: 'bench_press', label: 'Bench Press' },
+      { value: 'pull_ups', label: 'Pull-Ups' },
+      { value: 'overhead_press', label: 'Overhead Press' },
+      { value: 'running', label: 'Running' }
+    ]
+  },
+  {
+    key: 'programLength',
+    title: 'How many weeks should this program run?',
+    sub: null,
+    multi: false,
+    max: 1,
+    options: [
+      { value: 4, label: '4 Weeks' },
+      { value: 8, label: '8 Weeks' },
+      { value: 12, label: '12 Weeks' }
+    ]
+  },
+  {
+    key: 'recovery',
+    title: 'What is your recovery preference?',
+    sub: 'This influences weekly volume and how fast you progress.',
+    multi: false,
+    max: 1,
+    options: [
+      { value: 'joint_friendly', label: 'Joint-Friendly' },
+      { value: 'standard', label: 'Standard Recovery (Recommended)' },
+      { value: 'aggressive', label: 'Aggressive Progression' }
+    ]
+  },
+  {
+    key: 'split',
+    title: 'Do you have a preferred workout split?',
+    sub: 'If your choice does not fit your selected frequency, we will recommend the closest fit and explain why.',
+    multi: false,
+    max: 1,
+    options: [
+      { value: 'no_preference', label: 'No Preference (Recommended)' },
+      { value: 'full_body', label: 'Full Body' },
+      { value: 'upper_lower', label: 'Upper / Lower' },
+      { value: 'ppl', label: 'Push / Pull / Legs' }
+    ]
+  },
+  {
+    key: 'priority',
+    title: 'What matters most to you in this program?',
+    sub: null,
+    multi: false,
+    max: 1,
+    options: [
+      { value: 'fastest_results', label: 'Fastest Results' },
+      { value: 'balanced', label: 'Balanced (Recommended)' },
+      { value: 'best_recovery', label: 'Best Recovery' },
+      { value: 'injury_prevention', label: 'Injury Prevention' },
+      { value: 'enjoyable', label: 'Enjoyable Workouts' }
+    ]
+  }
+];
+
+function startGuidedOnboarding() {
+  state.onboarding = { stepIndex: 0, answers: {} };
+  state.screen = 'onboarding';
+  saveState();
+  render();
+}
+
+function onboardingSelectSingle(stepKey, value) {
+  state.onboarding.answers[stepKey] = value;
+  saveState();
+}
+
+function onboardingToggleMulti(stepKey, value, max) {
+  const current = state.onboarding.answers[stepKey] || [];
+  const idx = current.indexOf(value);
+  if (idx !== -1) {
+    current.splice(idx, 1);
+  } else {
+    if (current.length >= max) { toast('You can choose up to ' + max); return; }
+    current.push(value);
+  }
+  state.onboarding.answers[stepKey] = current;
+  saveState();
+  render();
+}
+
+function onboardingNext() {
+  const step = onboardingSteps[state.onboarding.stepIndex];
+  const answer = state.onboarding.answers[step.key];
+  const hasAnswer = step.multi ? (answer && answer.length > 0) : (answer !== undefined && answer !== null);
+  if (!hasAnswer && step.key !== 'secondaryFocus' && step.key !== 'avoidExercises') {
+    toast('Please make a selection to continue');
+    return;
+  }
+  if (state.onboarding.stepIndex < onboardingSteps.length - 1) {
+    state.onboarding.stepIndex += 1;
+    saveState();
+    render();
+  } else {
+    state.screen = 'onboarding_summary';
+    saveState();
+    render();
+  }
+}
+
+function onboardingBack() {
+  if (state.onboarding.stepIndex > 0) {
+    state.onboarding.stepIndex -= 1;
+    saveState();
+    render();
+  } else {
+    state.screen = 'select_goal';
+    state.onboarding = null;
+    saveState();
+    render();
+  }
+}
+
+function resolveEffectiveSplit(frequency, splitPref) {
+  if (splitPref !== 'no_preference') {
+    if (splitPref === 'upper_lower' && frequency < 2) return { split: 'full_body', note: 'Upper/Lower needs at least 2 days, so we used Full Body instead.' };
+    if (splitPref === 'ppl' && frequency < 3) return { split: 'upper_lower', note: 'Push/Pull/Legs needs at least 3 days, so we used Upper/Lower instead.' };
+    return { split: splitPref, note: null };
+  }
+  if (frequency <= 3) return { split: 'full_body', note: null };
+  if (frequency <= 5) return { split: 'upper_lower', note: null };
+  return { split: 'ppl', note: null };
+}
+
+const optionLabelLookups = {};
+onboardingSteps.forEach(function(step) {
+  const map = {};
+  step.options.forEach(function(opt) { map[opt.value] = opt.label; });
+  optionLabelLookups[step.key] = map;
+});
+
+function renderOnboardingStep(container) {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const step = onboardingSteps[state.onboarding.stepIndex];
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  wrap.style.textAlign = 'left';
+
+  const progress = document.createElement('div');
+  progress.style.cssText = 'display:flex;gap:4px;margin-bottom:18px;';
+  onboardingSteps.forEach(function(s, i) {
+    const dot = document.createElement('div');
+    dot.style.cssText = 'flex:1;height:4px;border-radius:2px;background:' + (i <= state.onboarding.stepIndex ? '#e8722c' : '#e6e4dc') + ';';
+    progress.appendChild(dot);
+  });
+  wrap.appendChild(progress);
+
+  const stepCount = document.createElement('div');
+  stepCount.style.cssText = 'font-size:12px;color:#999;font-weight:600;margin-bottom:6px;';
+  stepCount.textContent = 'Step ' + (state.onboarding.stepIndex + 1) + ' of ' + onboardingSteps.length;
+  wrap.appendChild(stepCount);
+
+  const h = document.createElement('h2');
+  h.style.cssText = 'text-align:left;font-size:19px;';
+  h.textContent = step.title;
+  wrap.appendChild(h);
+
+  if (step.sub) {
+    const sub = document.createElement('p');
+    sub.style.cssText = 'text-align:left;';
+    sub.textContent = step.sub;
+    wrap.appendChild(sub);
+  }
+
+  const currentAnswer = state.onboarding.answers[step.key];
+  step.options.forEach(function(opt) {
+    const btn = document.createElement('button');
+    btn.className = 'goal-btn';
+    const isSelected = step.multi ? (currentAnswer && currentAnswer.indexOf(opt.value) !== -1) : (currentAnswer === opt.value);
+    if (isSelected) { btn.style.cssText = 'border-color:#e8722c;background:#fdf0e6;'; }
+    btn.textContent = opt.label + (isSelected ? '  \u2713' : '');
+    btn.onclick = function() {
+      if (step.multi) {
+        onboardingToggleMulti(step.key, opt.value, step.max);
+      } else {
+        onboardingSelectSingle(step.key, opt.value);
+        render();
+      }
+    };
+    wrap.appendChild(btn);
+  });
+
+  const navRow = document.createElement('div');
+  navRow.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
+  const backBtn = document.createElement('button');
+  backBtn.className = 'modal-close';
+  backBtn.style.cssText = 'flex:1;margin-top:0;';
+  backBtn.textContent = 'Back';
+  backBtn.onclick = onboardingBack;
+  navRow.appendChild(backBtn);
+  const nextBtn = document.createElement('button');
+  nextBtn.style.cssText = 'flex:2;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;';
+  nextBtn.textContent = (state.onboarding.stepIndex === onboardingSteps.length - 1) ? 'Review My Answers' : 'Next';
+  nextBtn.onclick = onboardingNext;
+  navRow.appendChild(nextBtn);
+  wrap.appendChild(navRow);
+
+  app.appendChild(wrap);
+}
+
+function estimateWorkoutCount(frequency, weeks) {
+  return frequency * weeks;
+}
+
+function estimateCompletionDate(weeks) {
+  const d = new Date();
+  d.setDate(d.getDate() + weeks * 7);
+  return d.toISOString().split('T')[0];
+}
+
+function buildProgramHighlights(answers) {
+  const highlights = [];
+  const goalLabel = optionLabelLookups.primaryGoal[answers.primaryGoal];
+  highlights.push('Built around ' + goalLabel);
+  if (answers.secondaryFocus && answers.secondaryFocus.length > 0) {
+    const foci = answers.secondaryFocus.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
+    highlights.push('Extra attention on ' + foci);
+  }
+  const effective = resolveEffectiveSplit(answers.frequency, answers.split);
+  const splitLabels = { full_body: 'Full Body', upper_lower: 'Upper/Lower', ppl: 'Push/Pull/Legs' };
+  highlights.push(splitLabels[effective.split] + ' split, ' + answers.frequency + ' days a week');
+  highlights.push(answers.duration + '-minute sessions');
+  if (answers.avoidExercises && answers.avoidExercises.length > 0) {
+    highlights.push('Avoiding: ' + answers.avoidExercises.map(function(v) { return optionLabelLookups.avoidExercises[v]; }).join(', '));
+  }
+  return highlights;
+}
+
+function renderOnboardingSummary() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  const answers = state.onboarding.answers;
+  const wrap = document.createElement('div');
+  wrap.className = 'goal-screen';
+  wrap.style.textAlign = 'left';
+  wrap.innerHTML = '<h2 style="text-align:center;">Review your program</h2>';
+
+  const effective = resolveEffectiveSplit(answers.frequency, answers.split);
+  const splitLabels = { full_body: 'Full Body', upper_lower: 'Upper/Lower', ppl: 'Push/Pull/Legs' };
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.cssText = 'text-align:left;';
+  const rows = [
+    ['Primary Goal', optionLabelLookups.primaryGoal[answers.primaryGoal]],
+    ['Secondary Focus', (answers.secondaryFocus && answers.secondaryFocus.length > 0) ? answers.secondaryFocus.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(', ') : 'None'],
+    ['Experience', optionLabelLookups.experience[answers.experience]],
+    ['Frequency', answers.frequency + ' days per week'],
+    ['Duration', answers.duration + ' minutes'],
+    ['Equipment', optionLabelLookups.equipment[answers.equipment]],
+    ['Avoiding', (answers.avoidExercises && answers.avoidExercises.length > 0) ? answers.avoidExercises.map(function(v) { return optionLabelLookups.avoidExercises[v]; }).join(', ') : 'Nothing specific'],
+    ['Program Length', answers.programLength + ' weeks'],
+    ['Recovery', optionLabelLookups.recovery[answers.recovery]],
+    ['Split', splitLabels[effective.split]],
+    ['Priority', optionLabelLookups.priority[answers.priority]],
+    ['Estimated Workouts', estimateWorkoutCount(answers.frequency, answers.programLength)],
+    ['Estimated Completion', formatDateMDY(estimateCompletionDate(answers.programLength))]
+  ];
+  rows.forEach(function(r) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #f0efe9;font-size:13px;';
+    row.innerHTML = '<span style="color:#888;">' + r[0] + '</span><span style="font-weight:600;text-align:right;max-width:60%;">' + r[1] + '</span>';
+    card.appendChild(row);
+  });
+  wrap.appendChild(card);
+
+  if (effective.note) {
+    const noteBanner = document.createElement('div');
+    noteBanner.className = 'banner';
+    noteBanner.textContent = effective.note;
+    wrap.appendChild(noteBanner);
+  }
+
+  const highlightsLabel = document.createElement('div');
+  highlightsLabel.className = 'section-label';
+  highlightsLabel.textContent = 'Program Highlights';
+  wrap.appendChild(highlightsLabel);
+  const highlights = buildProgramHighlights(answers);
+  highlights.forEach(function(h) {
+    const item = document.createElement('div');
+    item.className = 'simple-item';
+    item.textContent = h;
+    wrap.appendChild(item);
+  });
+
+  const genBtn = document.createElement('button');
+  genBtn.className = 'goal-btn';
+  genBtn.style.cssText = 'text-align:center;background:#1c1c1a;color:#fff;border-color:#1c1c1a;margin-top:16px;';
+  genBtn.textContent = 'Generate My Program';
+  genBtn.onclick = function() {
+    toast('Program generation is coming in the next update');
+  };
+  wrap.appendChild(genBtn);
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'modal-close';
+  editBtn.textContent = 'Edit My Answers';
+  editBtn.onclick = function() {
+    state.onboarding.stepIndex = 0;
+    state.screen = 'onboarding';
+    saveState();
+    render();
+  };
+  wrap.appendChild(editBtn);
+
+  app.appendChild(wrap);
+}
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 
@@ -1345,7 +1756,20 @@ function renderGoalSelect() {
   app.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'goal-screen';
-  wrap.innerHTML = '<h2>What is your goal?</h2><p>Pick a starting point. You can swap individual exercises anytime, and choose a new goal after each cycle.</p>';
+  wrap.innerHTML = '<h2>What is your goal?</h2><p>Answer a few quick questions and we will build a personalized program, or pick a ready-made template below.</p>';
+
+  const guidedBtn = document.createElement('button');
+  guidedBtn.className = 'goal-btn';
+  guidedBtn.style.cssText = 'background:#1c1c1a;color:#fff;border-color:#1c1c1a;';
+  guidedBtn.innerHTML = 'Build My Personalized Program<div class="desc" style="color:#ccc;">Answer 11 quick questions, takes about 2 minutes</div>';
+  guidedBtn.onclick = startGuidedOnboarding;
+  wrap.appendChild(guidedBtn);
+
+  const divider = document.createElement('div');
+  divider.style.cssText = 'text-align:center;color:#999;font-size:12px;margin:16px 0;';
+  divider.textContent = 'OR CHOOSE A TEMPLATE';
+  wrap.appendChild(divider);
+
   Object.keys(goalTemplates).forEach(function(key) {
     const btn = document.createElement('button');
     btn.className = 'goal-btn';
@@ -2205,6 +2629,8 @@ function render() {
   app.innerHTML = '';
   if (!state.disclaimerAccepted) { renderDisclaimer(); return; }
   if (!state.proteinGoal && !state.proteinPromptShown) { renderProteinGoalSetup(); return; }
+  if (state.screen === 'onboarding') { renderOnboardingStep(app); return; }
+  if (state.screen === 'onboarding_summary') { renderOnboardingSummary(); return; }
   if (state.screen === 'select_goal') { renderGoalSelect(); return; }
   if (state.screen === 'select_subgoal') { renderSubgoalSelect(); return; }
   if (state.screen === 'select_length') { renderLengthSelect(); return; }
