@@ -482,7 +482,147 @@ function renderOnboardingStep(container) {
   app.appendChild(wrap);
 }
 
-function estimateWorkoutCount(frequency, weeks) {
+function exercisesPerDayForDuration(duration) {
+  const workMinutes = duration - 10;
+  const perExercise = 7;
+  const count = Math.max(2, Math.round(workMinutes / perExercise));
+  return Math.min(count, 8);
+}
+
+function equipmentAllowsExercise(exId, equipment) {
+  const ex = exerciseLibrary[exId];
+  if (!ex) return false;
+  const machineExercises = ['chest_press_machine', 'shoulder_press_machine', 'leg_press', 'lat_pulldown', 'chest_supported_row', 'seated_cable_row', 'cable_lateral_raise', 'cable_curl', 'triceps_pushdown', 'leg_extension', 'seated_leg_curl', 'calf_raise_machine', 'smith_rdl', 'smith_hip_thrust', 'hip_abductor', 'hip_adductor', 'rear_delt_pec_deck', 'torso_rotation', 'ab_crunch_machine', 'cable_woodchop', 'cable_chest_press', 'face_pull', 'straight_arm_pulldown'];
+  const dumbbellExercises = ['incline_db_press', 'flat_db_press', 'db_shoulder_press', 'db_lateral_raise', 'hammer_curl', 'db_curl', 'goblet_squat', 'triceps_kickback', 'overhead_triceps_ext'];
+  if (equipment === 'bodyweight_only') {
+    return !!ex.noWeight && machineExercises.indexOf(exId) === -1 && dumbbellExercises.indexOf(exId) === -1;
+  }
+  if (equipment === 'dumbbells_only') {
+    return ex.noWeight || dumbbellExercises.indexOf(exId) !== -1;
+  }
+  if (equipment === 'home_gym') {
+    return machineExercises.indexOf(exId) === -1;
+  }
+  return true;
+}
+
+function getMusclePoolForTemplate(goalKey, subgoalKey) {
+  const key = buildPlanKey(8, goalKey, subgoalKey) || buildPlanKey(8, goalKey, null);
+  const template = programLibrary[key] || programLibrary[buildPlanKey(4, goalKey, subgoalKey)] || programLibrary[buildPlanKey(12, goalKey, subgoalKey)];
+  const muscles = {};
+  if (!template) return muscles;
+  Object.keys(template.days).forEach(function(dk) {
+    const day = template.days[dk];
+    if (day.rest || !day.exerciseIds) return;
+    day.exerciseIds.forEach(function(exId) {
+      const m = exerciseLibrary[exId] ? exerciseLibrary[exId].muscle : null;
+      if (!m) return;
+      if (!muscles[m]) muscles[m] = [];
+      if (muscles[m].indexOf(exId) === -1) muscles[m].push(exId);
+    });
+  });
+  return muscles;
+}
+
+function substituteIfAvoided(exId, avoidList, equipment) {
+  const nameKeyMap = { deadlifts: 'smith_rdl', squats: 'goblet_squat', bench_press: 'chest_press_machine', pull_ups: 'lat_pulldown', overhead_press: 'shoulder_press_machine', running: 'treadmill' };
+  const avoidedIds = (avoidList || []).map(function(a) { return nameKeyMap[a]; }).filter(Boolean);
+  if (avoidedIds.indexOf(exId) === -1 && equipmentAllowsExercise(exId, equipment)) return exId;
+  const muscle = exerciseLibrary[exId] ? exerciseLibrary[exId].muscle : null;
+  if (!muscle) return exId;
+  const candidates = (substituteGroups[muscle] || []).filter(function(id) {
+    return avoidedIds.indexOf(id) === -1 && equipmentAllowsExercise(id, equipment);
+  });
+  return candidates.length > 0 ? candidates[0] : exId;
+}
+
+function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset) {
+  const muscleKeys = Object.keys(musclePool);
+  const flatList = [];
+  muscleKeys.forEach(function(m) { musclePool[m].forEach(function(exId) { flatList.push(exId); }); });
+  const uniqueList = flatList.filter(function(v, i) { return flatList.indexOf(v) === i; });
+  const rotated = uniqueList.slice(rotationOffset).concat(uniqueList.slice(0, rotationOffset));
+  const chosen = [];
+  for (let i = 0; i < rotated.length && chosen.length < exCount; i++) {
+    const substituted = substituteIfAvoided(rotated[i], avoidList, equipment);
+    if (chosen.indexOf(substituted) === -1) chosen.push(substituted);
+  }
+  const dayNameMap = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
+  return {
+    label: dayNameMap[dayKey] + ' ' + dayLabelType,
+    warmupId: equipment === 'bodyweight_only' ? 'bodyweight_squat' : 'treadmill',
+    exerciseIds: chosen,
+    finisherId: 'incline_walk'
+  };
+}
+
+function assignWorkoutDayKeys(frequency, effectiveSplit) {
+  const spreadPatterns = {
+    2: ['mon', 'thu'],
+    3: ['mon', 'wed', 'fri'],
+    4: ['mon', 'tue', 'thu', 'fri'],
+    5: ['mon', 'tue', 'wed', 'thu', 'fri'],
+    6: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+  };
+  return spreadPatterns[frequency] || spreadPatterns[3];
+}
+
+function dayTypeLabelsForSplit(effectiveSplit, frequency) {
+  if (effectiveSplit === 'full_body') {
+    const labels = [];
+    for (let i = 0; i < frequency; i++) labels.push('Full Body');
+    return labels;
+  }
+  if (effectiveSplit === 'upper_lower') {
+    const labels = [];
+    for (let i = 0; i < frequency; i++) labels.push(i % 2 === 0 ? 'Upper' : 'Lower');
+    return labels;
+  }
+  const pplCycle = ['Push', 'Pull', 'Legs'];
+  const labels = [];
+  for (let i = 0; i < frequency; i++) labels.push(pplCycle[i % 3]);
+  return labels;
+}
+
+function generatePersonalizedProgram() {
+  const answers = state.onboarding.answers;
+  const goalKey = state.onboarding.goalKey;
+  const subgoalKey = state.onboarding.subgoalKey;
+  const effective = resolveEffectiveSplit(answers.frequency, answers.split);
+  const workoutDayKeys = assignWorkoutDayKeys(answers.frequency, effective.split);
+  const dayTypeLabels = dayTypeLabelsForSplit(effective.split, answers.frequency);
+  const musclePool = getMusclePoolForTemplate(goalKey, subgoalKey);
+  const exCount = exercisesPerDayForDuration(answers.duration);
+
+  const newActivePlan = {};
+  DAY_ORDER.forEach(function(dk) {
+    const idxInWorkout = workoutDayKeys.indexOf(dk);
+    if (idxInWorkout === -1) {
+      const dayNameMap = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
+      newActivePlan[dk] = {
+        label: dayNameMap[dk] + ' Rest',
+        rest: true,
+        items: ['Rest', 'Stretch', 'Walk if desired'],
+        stepsGoal: '8,000+'
+      };
+    } else {
+      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout);
+    }
+  });
+
+  state.goal = goalKey;
+  state.selectedGoal = goalKey;
+  state.selectedSubgoal = subgoalKey;
+  state.activePlan = newActivePlan;
+  state.programLength = answers.programLength;
+  state.cycleStartDate = todayStr();
+  state.screen = 'day';
+  state.week = 1;
+  state.day = workoutDayKeys[0] || 'mon';
+  saveState();
+  showFireworksCelebration('Your personalized program is ready! Time to get started.');
+  render();
+}
   return frequency * weeks;
 }
 
@@ -576,7 +716,17 @@ function renderOnboardingSummary() {
   genBtn.style.cssText = 'text-align:center;background:#1c1c1a;color:#fff;border-color:#1c1c1a;margin-top:16px;';
   genBtn.textContent = 'Generate My Program';
   genBtn.onclick = function() {
-    toast('Program generation is coming in the next update');
+    if (!confirm('This will start a new cycle using your personalized program. Continue?')) return;
+    const isTransition = state.cycle >= 1 && state.activePlan;
+    if (isTransition && state.week && state.programLength) {
+      const hasData = state.checkpoints && ((state.checkpoints.start && state.checkpoints.start.weight) || (state.checkpoints.week4 && state.checkpoints.week4.weight) || (state.checkpoints.week8 && state.checkpoints.week8.weight));
+      if (hasData) { state.archivedCheckpoints.push({ cycle: state.cycle, start: state.checkpoints.start, week4: state.checkpoints.week4, week8: state.checkpoints.week8 }); }
+      state.goalHistory.push({ cycle: state.cycle, goal: state.goal, length: state.programLength });
+      state.checkpoints = { start: {}, week4: {}, week8: {} };
+      state.cycle += 1;
+      state.viewingCycle = state.cycle;
+    }
+    generatePersonalizedProgram();
   };
   wrap.appendChild(genBtn);
 
