@@ -187,7 +187,9 @@ let state = {
   cycleStartDate: null,
   autoBackupHistory: [],
   tutorialShown: false,
-  onboarding: null
+  onboarding: null,
+  programRecoveryPref: null,
+  programPriority: null
 };
 
 const onboardingSteps = [
@@ -615,6 +617,8 @@ function generatePersonalizedProgram() {
   state.selectedSubgoal = subgoalKey;
   state.activePlan = newActivePlan;
   state.programLength = answers.programLength;
+  state.programRecoveryPref = answers.recovery;
+  state.programPriority = answers.priority;
   state.cycleStartDate = todayStr();
   state.screen = 'day';
   state.week = 1;
@@ -1957,6 +1961,38 @@ function renderLengthSelect() {
   app.appendChild(wrap);
 }
 
+function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWeight) {
+  const match = scheme.match(/(\d+)\s*x\s*(\d+)/);
+  if (!match) return null;
+  const sets = parseInt(match[1], 10);
+  const baseReps = parseInt(match[2], 10);
+  const weightStep = 5;
+
+  function weightSuggestion() {
+    if (!mostRecentLoggedWeight) return 'Log a weight this week to get a suggestion next week';
+    return 'Try ' + (parseFloat(mostRecentLoggedWeight) + weightStep) + ' lbs (up from your last logged ' + mostRecentLoggedWeight + ' lbs)';
+  }
+
+  if (recoveryPref === 'aggressive') {
+    return { type: 'weight', text: weightSuggestion() };
+  }
+  if (recoveryPref === 'joint_friendly') {
+    const cyclePosition = ((week - 1) % 5);
+    if (cyclePosition >= 4) {
+      return { type: 'weight', text: 'Rep ceiling reached \u2014 ' + weightSuggestion() };
+    }
+    return { type: 'reps', text: sets + ' x ' + (baseReps + cyclePosition + 1) + ' this week' };
+  }
+  if (week % 2 === 1) {
+    return { type: 'reps', text: sets + ' x ' + (baseReps + 2) + ' this week' };
+  }
+  return { type: 'weight', text: weightSuggestion() };
+}
+
+function isRecoveryWeek(week) {
+  return week > 1 && (week - 1) % 4 === 0;
+}
+
 function renderExerciseCard(dayKey, exId, exIndex) {
   const ex = exerciseLibrary[exId];
   const day = state.activePlan[dayKey];
@@ -2019,6 +2055,16 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     render();
   });
   card.appendChild(row);
+  if (state.programRecoveryPref) {
+    const prevForSuggestion = getPrevEntry(dayKey, exId, state.week);
+    const suggestion = getProgressionSuggestion(ex.scheme, state.week, state.programRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
+    if (suggestion) {
+      const sugRow = document.createElement('div');
+      sugRow.style.cssText = 'font-size:12px;color:#1c3a7a;background:#eef3fb;border-radius:6px;padding:6px 8px;margin-top:8px;';
+      sugRow.textContent = 'Suggested: ' + suggestion.text;
+      card.appendChild(sugRow);
+    }
+  }
   if (entry.date) {
     const dn = document.createElement('div');
     dn.className = 'prev-weight';
@@ -2104,6 +2150,12 @@ function renderDayContent(container) {
   const content = document.createElement('div');
   content.className = 'content';
   renderCheckinReminder(content);
+  if (state.programRecoveryPref && isRecoveryWeek(state.week)) {
+    const recoveryBanner = document.createElement('div');
+    recoveryBanner.className = 'banner';
+    recoveryBanner.textContent = 'This is typically a lighter week. Consider trimming a set or two, or using a lighter weight, if you are feeling fatigued.';
+    content.appendChild(recoveryBanner);
+  }
   const day = state.activePlan[state.day];
   if (day.rest) {
     const banner = document.createElement('div');
