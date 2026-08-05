@@ -1372,6 +1372,95 @@ function renderTutorialTab(container) {
   container.appendChild(wrap);
 }
 
+function renderAdminScreen(container) {
+  const content = document.createElement('div');
+  content.className = 'content';
+
+  const intro = document.createElement('div');
+  intro.className = 'banner';
+  intro.innerHTML = '<strong>Admin:</strong> back up your data, manage cycles, replay the tutorial, or review the medical disclaimer.';
+  content.appendChild(intro);
+
+  renderBackupBox(content);
+  renderAutoBackupList(content);
+  renderCycleManager(content);
+
+  const restartWrap = document.createElement('div');
+  restartWrap.className = 'card';
+  restartWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Finished this cycle?</p><p class="ex-scheme" style="margin-bottom:10px;">Choose a new program length and goal. All past data stays saved for these graphs.</p>';
+  const restartBtn = document.createElement('button');
+  restartBtn.textContent = 'Start New Cycle';
+  restartBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;';
+  restartBtn.onclick = function() {
+    if (confirm('Start a new cycle? Your current cycle data stays saved for progress tracking, and you will choose a new program length and goal.')) {
+      const hasData = state.checkpoints && ((state.checkpoints.start && state.checkpoints.start.weight) || (state.checkpoints.week4 && state.checkpoints.week4.weight) || (state.checkpoints.week8 && state.checkpoints.week8.weight));
+      if (hasData) { state.archivedCheckpoints.push({ cycle: state.cycle, start: state.checkpoints.start, week4: state.checkpoints.week4, week8: state.checkpoints.week8 }); }
+      state.goalHistory.push({ cycle: state.cycle, goal: state.goal, length: state.programLength });
+      state.checkpoints = { start: {}, week4: {}, week8: {} };
+      state.cycle += 1;
+      state.viewingCycle = state.cycle;
+      state.week = 1;
+      state.screen = 'select_goal';
+      saveState();
+      render();
+    }
+  };
+  restartWrap.appendChild(restartBtn);
+  content.appendChild(restartWrap);
+
+  const newProgramWrap = document.createElement('div');
+  newProgramWrap.className = 'card';
+  newProgramWrap.style.cssText = 'border: 2px solid #b9cdf0;';
+  newProgramWrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Want to switch programs now?</p><p class="ex-scheme" style="margin-bottom:10px;">Start a brand new program right away without waiting for this cycle to finish. Your current progress stays saved.</p>';
+  const newProgramBtn = document.createElement('button');
+  newProgramBtn.textContent = 'Create New Program';
+  newProgramBtn.style.cssText = 'width:100%;padding:12px;background:#eef3fb;color:#1c3a7a;border:1px solid #b9cdf0;border-radius:10px;font-size:14px;font-weight:600;';
+  newProgramBtn.onclick = function() {
+    if (confirm('Start a brand new program now? Your current cycle data stays saved for progress tracking, and you will choose a new program length and goal.')) {
+      const hasData = state.checkpoints && ((state.checkpoints.start && state.checkpoints.start.weight) || (state.checkpoints.week4 && state.checkpoints.week4.weight) || (state.checkpoints.week8 && state.checkpoints.week8.weight));
+      if (hasData) { state.archivedCheckpoints.push({ cycle: state.cycle, start: state.checkpoints.start, week4: state.checkpoints.week4, week8: state.checkpoints.week8 }); }
+      state.goalHistory.push({ cycle: state.cycle, goal: state.goal, length: state.programLength });
+      state.checkpoints = { start: {}, week4: {}, week8: {} };
+      state.cycle += 1;
+      state.viewingCycle = state.cycle;
+      state.week = 1;
+      state.screen = 'select_goal';
+      saveState();
+      render();
+    }
+  };
+  newProgramWrap.appendChild(newProgramBtn);
+  content.appendChild(newProgramWrap);
+
+  const tutorialLabel = document.createElement('div');
+  tutorialLabel.className = 'section-label';
+  tutorialLabel.textContent = 'Tutorial';
+  content.appendChild(tutorialLabel);
+  const tutorialCard = document.createElement('div');
+  tutorialCard.className = 'card';
+  tutorialCard.innerHTML = '<p class="ex-scheme" style="margin-bottom:10px;">Replay the app walkthrough anytime.</p>';
+  const startTutorialBtn = document.createElement('button');
+  startTutorialBtn.textContent = 'Start Tutorial';
+  startTutorialBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;';
+  startTutorialBtn.onclick = function() { showTutorial(function() { render(); }); };
+  tutorialCard.appendChild(startTutorialBtn);
+  content.appendChild(tutorialCard);
+
+  const legalLabel = document.createElement('div');
+  legalLabel.className = 'section-label';
+  legalLabel.textContent = 'Legal';
+  content.appendChild(legalLabel);
+  const legalLink = document.createElement('button');
+  legalLink.textContent = 'View medical disclaimer';
+  legalLink.style.cssText = 'width:100%;padding:10px;background:none;border:none;color:#999;font-size:12px;text-decoration:underline;';
+  legalLink.onclick = function() { state.disclaimerAccepted = false; saveState(); render(); };
+  content.appendChild(legalLink);
+
+  renderTipLink(content);
+
+  container.appendChild(content);
+}
+
 function acceptDisclaimer() {
   state.disclaimerAccepted = true;
   state.disclaimerAcceptedDate = todayStr();
@@ -3637,6 +3726,7 @@ function renderProgressScreen(container) {
 
   renderProgramProgressCard(content);
   renderWeeklySummaryCard(content);
+  renderAchievementsCard(content);
 
   renderBackupBox(content);
   renderAutoBackupList(content);
@@ -3743,12 +3833,6 @@ function renderProgressScreen(container) {
     nd.textContent = 'No weighted exercises logged yet.';
     content.appendChild(nd);
   }
-  const legalLink = document.createElement('button');
-  legalLink.textContent = 'View medical disclaimer';
-  legalLink.style.cssText = 'width:100%;padding:10px;background:none;border:none;color:#999;font-size:12px;text-decoration:underline;margin-top:16px;';
-  legalLink.onclick = function() { state.disclaimerAccepted = false; saveState(); render(); };
-  content.appendChild(legalLink);
-  renderTipLink(content);
   container.appendChild(content);
 }
 
@@ -3969,10 +4053,10 @@ function renderDayTabs(container) {
   };
   dt.appendChild(pb);
   const tb = document.createElement('button');
-  tb.className = 'day-tab' + (state.screen === 'tutorial' ? ' active' : '');
-  tb.textContent = 'Tutorial';
+  tb.className = 'day-tab' + (state.screen === 'admin' ? ' active' : '');
+  tb.textContent = 'Admin';
   tb.onclick = function() {
-    state.screen = state.screen === 'tutorial' ? 'day' : 'tutorial';
+    state.screen = state.screen === 'admin' ? 'day' : 'admin';
     saveState();
     render();
   };
@@ -4049,7 +4133,7 @@ function render() {
   if (state.screen === 'checkpoints') { renderCheckpointsScreen(app); }
   else if (state.screen === 'progress') { renderProgressScreen(app); }
   else if (state.screen === 'protein') { renderProteinScreen(app); }
-  else if (state.screen === 'tutorial') { renderTutorialTab(app); }
+  else if (state.screen === 'admin') { renderAdminScreen(app); }
   else { renderDayContent(app); }
 }
 
