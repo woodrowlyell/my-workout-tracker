@@ -54,7 +54,8 @@
   .progress-ex-card .no-data { font-size: 12px; color: #aaa; padding: 10px 0; text-align: center; }
   svg.chart { width: 100%; height: auto; display: block; }
   .chart-stats { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; color: #888; }
-  .chart-stats strong { color: #1c1c1a; font-size: 13px; }
+  .chart-stats strong { font-size: 13px; }
+  .chart-stats > div { color: #1c1c1a; }
   .goal-screen { padding: 30px 20px; text-align: center; }
   .goal-screen h2 { font-size: 20px; margin-bottom: 8px; }
   .goal-screen p { font-size: 14px; color: #777; margin-bottom: 24px; }
@@ -220,7 +221,8 @@ let state = {
 const GRAPH_PREFS_KEY = 'workout-graph-prefs-v1';
 let graphPrefs = {
   range: 'all',   // '30d' | 'program' | 'all'
-  view: 'compact' // 'compact' | 'detailed'  (view mode wired up in 2b)
+  view: 'compact', // 'compact' | 'detailed'
+  trendLines: {}  // per-chart-id boolean map
 };
 
 function loadGraphPrefs() {
@@ -230,6 +232,7 @@ function loadGraphPrefs() {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
         graphPrefs = Object.assign({}, graphPrefs, parsed);
+        if (!graphPrefs.trendLines) graphPrefs.trendLines = {};
       }
     }
   } catch (e) {
@@ -253,7 +256,7 @@ function setGraphRange(range) {
 }
 
 /**
- * Filters an array of {label, val, week, cycle, dateSort} style points
+ * Filters an array of {label, val, week, cycle} style points
  * down to a time range, WITHOUT altering how points are built or stored.
  * Points that don't carry week/cycle (e.g. pre-existing shapes) pass through
  * unfiltered so nothing existing can break.
@@ -268,8 +271,6 @@ function filterPointsByRange(points, range) {
     return points.filter(function(p) { return p.cycle === state.viewingCycle; });
   }
   if (range === '30d') {
-    // Approximate "last 30 days" as the last ~4-5 weeks of the currently viewed cycle,
-    // since points are week-indexed rather than date-indexed by nature of the existing data model.
     const weeksBack = 4;
     const sameCycle = points.filter(function(p) { return p.cycle === state.viewingCycle; });
     if (sameCycle.length === 0) return points;
@@ -2540,12 +2541,8 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
 }
 
 /**
- * PHASE 2b additions (presentation only, no calculation/storage changes):
- * - Linear regression trend line, toggle persisted per chart-title in graphPrefs
- * - Personal Best marker (higher-is-better only; opt-in via showPB param)
- * - Change indicator with arrow + percentage, color coded
- * - Tap-a-point popover with exact value/label
- * Chart id is derived from title so different charts can remember their own trend-line toggle.
+ * PHASE 2b + 2c: presentation-only additions layered on the original chart function.
+ * No calculation/storage changes to underlying weights/checkpoints/protein data.
  */
 function linearRegression(xs, ys) {
   const n = xs.length;
@@ -2574,22 +2571,147 @@ function toggleTrendLine(chartId) {
   render();
 }
 
-function buildLineChart(title, points, color, showPB) {
+let savedScrollPosition = null;
+
+function openFullscreenChart(title, points, color, showPB, insightsFn) {
+  savedScrollPosition = { x: window.scrollX, y: window.scrollY };
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:80;display:flex;flex-direction:column;overflow-y:auto;';
+
+  const topBar = document.createElement('div');
+  topBar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #e6e4dc;flex-shrink:0;';
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = 'font-size:16px;font-weight:700;';
+  titleEl.textContent = title || 'Chart';
+  topBar.appendChild(titleEl);
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.style.cssText = 'padding:8px 16px;background:#1c1c1a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;';
+  closeBtn.onclick = function() {
+    document.body.removeChild(overlay);
+    if (savedScrollPosition) {
+      window.scrollTo(savedScrollPosition.x, savedScrollPosition.y);
+      savedScrollPosition = null;
+    }
+  };
+  topBar.appendChild(closeBtn);
+  overlay.appendChild(topBar);
+
+  const chartArea = document.createElement('div');
+  chartArea.style.cssText = 'flex:1;padding:16px;display:flex;flex-direction:column;';
+  const isLandscape = window.innerWidth > window.innerHeight;
+  const bigChart = buildLineChart(title, points, color, showPB, { fullscreen: true, landscape: isLandscape });
+  bigChart.style.cssText = 'flex-shrink:0;';
+  chartArea.appendChild(bigChart);
+
+  if (insightsFn) {
+    const insights = insightsFn();
+    if (insights && insights.length > 0) {
+      const insightsLabel = document.createElement('div');
+      insightsLabel.className = 'section-label';
+      insightsLabel.textContent = 'Smart Insights';
+      chartArea.appendChild(insightsLabel);
+      insights.forEach(function(line) {
+        const item = document.createElement('div');
+        item.className = 'simple-item';
+        item.textContent = line;
+        chartArea.appendChild(item);
+      });
+    }
+  }
+
+  overlay.appendChild(chartArea);
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Simple, verifiable insights from the same points array driving the chart.
+ * higherIsBetter: true (lifts/steps/protein), null (body measurements, direction unknown/neutral).
+ */
+function buildStreakAndPRInsights(points, higherIsBetter) {
+  const valid = points.filter(function(p) { return p.val !== null && !isNaN(p.val); });
+  if (valid.length < 2) return [];
+  const insights = [];
+
+  let streak = 0;
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (points[i].val !== null && !isNaN(points[i].val)) streak++;
+    else break;
+  }
+  insights.push('Current logging streak: ' + streak + ' consecutive week' + (streak === 1 ? '' : 's'));
+
+  let biggestChange = 0;
+  let biggestChangeLabel = '';
+  for (let i = 1; i < valid.length; i++) {
+    const delta = valid[i].val - valid[i - 1].val;
+    if (Math.abs(delta) > Math.abs(biggestChange)) {
+      biggestChange = delta;
+      biggestChangeLabel = valid[i - 1].label + ' \u2192 ' + valid[i].label;
+    }
+  }
+  if (biggestChange !== 0) {
+    if (higherIsBetter === null || higherIsBetter === undefined) {
+      insights.push('Biggest single change: ' + (biggestChange > 0 ? '+' : '') + biggestChange.toFixed(1) + ' (' + biggestChangeLabel + ')');
+    } else {
+      const magnitude = higherIsBetter ? biggestChange : -biggestChange;
+      if (magnitude > 0) {
+        insights.push('Biggest single jump: +' + magnitude.toFixed(1) + ' (' + biggestChangeLabel + ')');
+      }
+    }
+  }
+
+  if (higherIsBetter === true) {
+    let bestVal = -Infinity, bestIdx = -1;
+    valid.forEach(function(p, i) { if (p.val > bestVal) { bestVal = p.val; bestIdx = i; } });
+    const weeksSincePR = (valid.length - 1) - bestIdx;
+    if (weeksSincePR === 0) {
+      insights.push('Your latest entry is a new personal best!');
+    } else {
+      insights.push('Weeks since personal best: ' + weeksSincePR);
+    }
+  }
+
+  const avg = valid.reduce(function(a, p) { return a + p.val; }, 0) / valid.length;
+  insights.push('Average over this range: ' + avg.toFixed(1));
+
+  return insights;
+}
+
+function buildLineChart(title, points, color, showPB, opts) {
+  const options = opts || {};
+  const isFullscreen = !!options.fullscreen;
+  const isLandscape = !!options.landscape;
   const wrap = document.createElement('div');
   wrap.className = 'progress-ex-card';
-  const chartId = chartIdFromTitle(title, color);
+  const baseChartId = chartIdFromTitle(title, color);
+  const chartId = baseChartId + (isFullscreen ? '_full' : '');
+
   if (title) {
     const headerRow = document.createElement('div');
-    headerRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;';
+    headerRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:6px;flex-wrap:wrap;';
     const h = document.createElement('h4');
     h.style.margin = '0';
     h.textContent = title;
     headerRow.appendChild(h);
+    const btnGroup = document.createElement('div');
+    btnGroup.style.cssText = 'display:flex;gap:6px;';
     const trendBtn = document.createElement('button');
-    trendBtn.textContent = isTrendLineOn(chartId) ? 'Trend: On' : 'Trend: Off';
-    trendBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid ' + (isTrendLineOn(chartId) ? '#b9cdf0' : '#e6e4dc') + ';background:' + (isTrendLineOn(chartId) ? '#eef3fb' : '#f7f6f2') + ';color:' + (isTrendLineOn(chartId) ? '#1c3a7a' : '#888') + ';';
-    trendBtn.onclick = function() { toggleTrendLine(chartId); };
-    headerRow.appendChild(trendBtn);
+    trendBtn.textContent = isTrendLineOn(baseChartId) ? 'Trend: On' : 'Trend: Off';
+    trendBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid ' + (isTrendLineOn(baseChartId) ? '#b9cdf0' : '#e6e4dc') + ';background:' + (isTrendLineOn(baseChartId) ? '#eef3fb' : '#f7f6f2') + ';color:' + (isTrendLineOn(baseChartId) ? '#1c3a7a' : '#888') + ';';
+    trendBtn.onclick = function() { toggleTrendLine(baseChartId); };
+    btnGroup.appendChild(trendBtn);
+    if (!isFullscreen) {
+      const expandBtn = document.createElement('button');
+      expandBtn.textContent = 'Expand';
+      expandBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid #e6e4dc;background:#f7f6f2;color:#888;';
+      expandBtn.onclick = function() {
+        const insightsFn = function() { return buildStreakAndPRInsights(filterPointsByRange(points, graphPrefs.range), showPB === true ? true : (showPB === false ? null : showPB)); };
+        openFullscreenChart(title, points, color, showPB, insightsFn);
+      };
+      btnGroup.appendChild(expandBtn);
+    }
+    headerRow.appendChild(btnGroup);
     wrap.appendChild(headerRow);
   }
 
@@ -2608,13 +2730,15 @@ function buildLineChart(title, points, color, showPB) {
     wrap.appendChild(nd);
     return wrap;
   }
-  const W = 320, H = 140, pad = 30;
+
+  const W = isFullscreen ? (isLandscape ? 640 : 380) : 320;
+  const H = isFullscreen ? (isLandscape ? 320 : 260) : 140;
+  const pad = isFullscreen ? 40 : 30;
   const vals = valid.map(function(p) { return p.val; });
   const min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
   const range = max - min || 1;
   const stepX = (W - pad * 2) / (filteredPoints.length - 1);
 
-  // Find personal best (highest val) among valid points, only when explicitly requested.
   let pbIndex = -1;
   if (showPB) {
     let bestVal = -Infinity;
@@ -2624,12 +2748,10 @@ function buildLineChart(title, points, color, showPB) {
   }
 
   let pathD = '', dots = '', labels = '';
-  const pointCoords = [];
   filteredPoints.forEach(function(p, i) {
-    if (p.val === null || isNaN(p.val)) { pointCoords.push(null); return; }
+    if (p.val === null || isNaN(p.val)) return;
     const x = pad + i * stepX;
     const y = H - pad - ((p.val - min) / range) * (H - pad * 2);
-    pointCoords.push({ x: x, y: y });
     pathD += (pathD ? 'L' : 'M') + x + ',' + y + ' ';
     const isPB = showPB && i === pbIndex;
     dots += '<circle class="chart-dot" data-idx="' + i + '" cx="' + x + '" cy="' + y + '" r="' + (isPB ? 6 : 4) + '" fill="' + (isPB ? '#ffd700' : color) + '" stroke="' + (isPB ? '#a1780a' : 'none') + '" stroke-width="' + (isPB ? 2 : 0) + '" style="cursor:pointer;"/>';
@@ -2640,9 +2762,8 @@ function buildLineChart(title, points, color, showPB) {
     labels += '<text x="' + x + '" y="' + (y - 10) + '" font-size="11" fill="#333" text-anchor="middle" font-weight="600">' + p.val + '</text>';
   });
 
-  // Trend line: linear regression over index vs val, drawn as dashed line across full width.
   let trendPath = '';
-  if (isTrendLineOn(chartId)) {
+  if (isTrendLineOn(baseChartId)) {
     const xs = [];
     const ys = [];
     filteredPoints.forEach(function(p, i) { if (p.val !== null && !isNaN(p.val)) { xs.push(i); ys.push(p.val); } });
@@ -2672,7 +2793,6 @@ function buildLineChart(title, points, color, showPB) {
     '<div style="color:' + changeColor + ';">Change: <strong>' + arrow + ' ' + (diff > 0 ? '+' : '') + diff + (pctChange !== null ? ' (' + (pctChange > 0 ? '+' : '') + pctChange + '%)' : '') + '</strong></div>';
   wrap.appendChild(stats);
 
-  // Tap-a-point popover: simple inline detail line that updates on dot click, no external deps.
   const detailBox = document.createElement('div');
   detailBox.style.cssText = 'font-size:12px;color:#1c3a7a;background:#eef3fb;border-radius:8px;padding:0;margin-top:0;max-height:0;overflow:hidden;transition:all 0.15s ease;';
   wrap.appendChild(detailBox);
@@ -2816,9 +2936,9 @@ function renderCheckpointsScreen(container) {
   defs.forEach(function(def) {
     allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null, cycle: state.cycle, week: def.targetWeek });
   });
-  content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight, cycle: p.cycle, week: p.week }; }), '#e8722c'));
-  content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist, cycle: p.cycle, week: p.week }; }), '#3a7ae8'));
-  content.appendChild(buildLineChart('Hips (in)', allPoints.map(function(p) { return { label: p.label, val: p.hips, cycle: p.cycle, week: p.week }; }), '#c2427a'));
+  content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight, cycle: p.cycle, week: p.week }; }), '#e8722c', false));
+  content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist, cycle: p.cycle, week: p.week }; }), '#3a7ae8', false));
+  content.appendChild(buildLineChart('Hips (in)', allPoints.map(function(p) { return { label: p.label, val: p.hips, cycle: p.cycle, week: p.week }; }), '#c2427a', false));
   container.appendChild(content);
 }
 
@@ -2902,19 +3022,19 @@ function renderProgressScreen(container) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
       return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
     });
-    content.appendChild(buildLineChart('Daily Steps', stepPoints, '#3a7ae8'));
+    content.appendChild(buildLineChart('Daily Steps', stepPoints, '#3a7ae8', true));
   }
   const seen = {};
   Object.keys(exerciseLibrary).forEach(function(exId) {
     const entries = getAllEntriesForExercise(exId);
     if (entries.length === 0) return;
     seen[exId] = true;
-    const card = document.createElement('div');
-    card.className = 'progress-ex-card';
-    const h = document.createElement('h4');
-    h.textContent = exerciseLibrary[exId].name;
-    card.appendChild(h);
     if (entries.length < 2) {
+      const card = document.createElement('div');
+      card.className = 'progress-ex-card';
+      const h = document.createElement('h4');
+      h.textContent = exerciseLibrary[exId].name;
+      card.appendChild(h);
       const nd = document.createElement('div');
       nd.className = 'no-data';
       nd.textContent = '1 entry logged (Week ' + entries[0].week + ': ' + entries[0].weight + ' lbs) - need 2+ to graph';
@@ -2927,9 +3047,7 @@ function renderProgressScreen(container) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
       return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
     });
-    const chart = buildLineChart('', points, '#e8722c');
-    card.innerHTML += chart.innerHTML;
-    content.appendChild(card);
+    content.appendChild(buildLineChart(exerciseLibrary[exId].name, points, '#e8722c', true));
   });
   if (Object.keys(seen).length === 0) {
     const nd = document.createElement('div');
@@ -3113,7 +3231,7 @@ function renderProteinScreen(container) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
       return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.total, cycle: e.cycle, week: e.week };
     });
-    content.appendChild(buildLineChart('Daily Protein (g)', points, '#e8722c'));
+    content.appendChild(buildLineChart('Daily Protein (g)', points, '#e8722c', true));
   } else {
     const nd = document.createElement('div');
     nd.className = 'rest-note';
