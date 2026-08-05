@@ -2423,6 +2423,187 @@ function renderRecoveryBanner(container) {
 }
 
 /* =========================================================
+   PHASE 5: Progress Experience
+   Pure aggregation/display over existing state. No new
+   stored fields. "Total Volume" is explicitly labeled as an
+   estimate since only prescribed sets/reps (from ex.scheme)
+   are available, not actual reps performed.
+   ========================================================= */
+function computeProgramProgress() {
+  const totalWeeks = state.programLength || 8;
+  const orderedDays = getOrderedDayKeys();
+
+  let completedWorkouts = 0;
+  let totalScheduledWorkouts = 0;
+
+  for (let w = 1; w <= totalWeeks; w++) {
+    orderedDays.forEach(function(dayKey) {
+      const dayDef = state.activePlan[dayKey];
+      if (dayDef.rest) return;
+      totalScheduledWorkouts++;
+      if (w <= state.week) {
+        if (isDayComplete(dayKey, w)) completedWorkouts++;
+      }
+    });
+  }
+
+  const percentComplete = totalScheduledWorkouts > 0
+    ? Math.round((completedWorkouts / totalScheduledWorkouts) * 100)
+    : 0;
+  const remainingWorkouts = Math.max(0, totalScheduledWorkouts - completedWorkouts);
+  const estimatedCompletionDate = state.cycleStartDate ? getTargetDateForWeek(state.cycleStartDate, totalWeeks + 1) : null;
+
+  return {
+    percentComplete: percentComplete,
+    currentWeek: state.week,
+    totalWeeks: totalWeeks,
+    completedWorkouts: completedWorkouts,
+    remainingWorkouts: remainingWorkouts,
+    estimatedCompletionDate: estimatedCompletionDate
+  };
+}
+
+function parseSchemeForVolume(scheme) {
+  const rangeMatch = (scheme || '').match(/(\d+)\s*x\s*(\d+)\s*-\s*(\d+)/);
+  if (rangeMatch) {
+    return { sets: parseInt(rangeMatch[1], 10), reps: (parseInt(rangeMatch[2], 10) + parseInt(rangeMatch[3], 10)) / 2 };
+  }
+  const match = (scheme || '').match(/(\d+)\s*x\s*(\d+)/);
+  if (!match) return null;
+  return { sets: parseInt(match[1], 10), reps: parseInt(match[2], 10) };
+}
+
+function computeWeeklySummary() {
+  const week = state.week;
+  const cycle = state.viewingCycle;
+  const orderedDays = getOrderedDayKeys();
+
+  let scheduledCount = 0;
+  let completedCount = 0;
+  let totalVolume = 0;
+  const stepsThisWeek = [];
+  const personalRecords = [];
+
+  orderedDays.forEach(function(dayKey) {
+    const day = state.activePlan[dayKey];
+    const stepsE = getEntry(dayKey, '__steps__', week, cycle);
+    if (stepsE && stepsE.weight) stepsThisWeek.push(parseFloat(stepsE.weight));
+    if (day.rest) return;
+
+    scheduledCount++;
+    if (isDayComplete(dayKey, week)) completedCount++;
+
+    (day.exerciseIds || []).forEach(function(exId) {
+      const ex = exerciseLibrary[exId];
+      if (!ex || ex.noWeight) return;
+      const entry = getEntry(dayKey, exId, week, cycle);
+      if (entry && entry.weight) {
+        const parsed = parseSchemeForVolume(ex.scheme);
+        if (parsed) totalVolume += parseFloat(entry.weight) * parsed.sets * parsed.reps;
+        const allEntries = getAllEntriesForExercise(exId);
+        const maxEver = allEntries.reduce(function(m, e) { return Math.max(m, e.weight); }, -Infinity);
+        if (maxEver > -Infinity && parseFloat(entry.weight) >= maxEver) {
+          personalRecords.push({ exId: exId, name: ex.name, weight: parseFloat(entry.weight) });
+        }
+      }
+    });
+  });
+
+  const consistency = scheduledCount > 0 ? Math.round((completedCount / scheduledCount) * 100) : null;
+  const avgSteps = stepsThisWeek.length > 0
+    ? Math.round(stepsThisWeek.reduce(function(a, b) { return a + b; }, 0) / stepsThisWeek.length)
+    : null;
+
+  return {
+    workoutsCompleted: completedCount,
+    scheduledCount: scheduledCount,
+    consistency: consistency,
+    totalVolume: Math.round(totalVolume),
+    avgSteps: avgSteps,
+    personalRecords: personalRecords
+  };
+}
+
+function renderProgramProgressCard(container) {
+  const p = computeProgramProgress();
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  wrap.innerHTML = '<p class="ex-name" style="margin-bottom:10px;">Program Progress \u2014 Cycle ' + state.cycle + '</p>';
+
+  const barOuter = document.createElement('div');
+  barOuter.style.cssText = 'background:#f0efe9;border-radius:20px;height:10px;overflow:hidden;margin-bottom:6px;';
+  const barInner = document.createElement('div');
+  barInner.style.cssText = 'background:#e8722c;height:100%;width:' + p.percentComplete + '%;';
+  barOuter.appendChild(barInner);
+  wrap.appendChild(barOuter);
+
+  const pctLabel = document.createElement('div');
+  pctLabel.style.cssText = 'font-size:13px;color:#777;margin-bottom:12px;';
+  pctLabel.textContent = p.percentComplete + '% complete';
+  wrap.appendChild(pctLabel);
+
+  const rows = [
+    ['Current Week', p.currentWeek + ' of ' + p.totalWeeks],
+    ['Completed Workouts', String(p.completedWorkouts)],
+    ['Remaining Workouts', String(p.remainingWorkouts)],
+    ['Estimated Completion', p.estimatedCompletionDate ? formatDateMDY(p.estimatedCompletionDate) : 'Set a cycle start date on Checkpoints']
+  ];
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
+  rows.forEach(function(r) {
+    const cell = document.createElement('div');
+    cell.innerHTML = '<div style="font-size:11px;color:#999;">' + r[0] + '</div><div style="font-size:15px;font-weight:700;">' + r[1] + '</div>';
+    grid.appendChild(cell);
+  });
+  wrap.appendChild(grid);
+  container.appendChild(wrap);
+}
+
+function renderWeeklySummaryCard(container) {
+  const s = computeWeeklySummary();
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  wrap.innerHTML = '<p class="ex-name" style="margin-bottom:10px;">Weekly Summary \u2014 Week ' + state.week + '</p>';
+
+  const rows = [
+    ['Workouts Completed', s.workoutsCompleted + ' of ' + s.scheduledCount],
+    ['Consistency', s.consistency !== null ? s.consistency + '%' : '\u2014'],
+    ['Total Volume (est.)', s.totalVolume > 0 ? s.totalVolume.toLocaleString() + ' lbs' : '\u2014'],
+    ['Average Daily Steps', s.avgSteps !== null ? s.avgSteps.toLocaleString() : '\u2014']
+  ];
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;';
+  rows.forEach(function(r) {
+    const cell = document.createElement('div');
+    cell.innerHTML = '<div style="font-size:11px;color:#999;">' + r[0] + '</div><div style="font-size:15px;font-weight:700;">' + r[1] + '</div>';
+    grid.appendChild(cell);
+  });
+  wrap.appendChild(grid);
+
+  if (s.totalVolume > 0) {
+    const volNote = document.createElement('div');
+    volNote.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:10px;';
+    volNote.textContent = 'Volume is estimated from your programmed sets/reps \u00d7 logged weight, not actual reps performed.';
+    wrap.appendChild(volNote);
+  }
+
+  if (s.personalRecords.length > 0) {
+    const prLabel = document.createElement('div');
+    prLabel.style.cssText = 'font-size:12px;font-weight:700;color:#a1780a;margin-top:4px;margin-bottom:6px;';
+    prLabel.textContent = '\u2b50 Personal Records This Week';
+    wrap.appendChild(prLabel);
+    s.personalRecords.forEach(function(pr) {
+      const line = document.createElement('div');
+      line.style.cssText = 'font-size:13px;color:#1c1c1a;margin-bottom:2px;';
+      line.textContent = pr.name + ': ' + pr.weight + ' lbs';
+      wrap.appendChild(line);
+    });
+  }
+
+  container.appendChild(wrap);
+}
+
+/* =========================================================
    PHASE 3: Smart Daily Workout Adaptation
    Today-only, non-destructive. Never touches state.activePlan
    or any stored program data. Stored separately and keyed by
@@ -2784,6 +2965,7 @@ function renderDayContent(container) {
     return;
   }
   renderDailyAdaptBanner(content, state.day, adapted.cutIds);
+  renderRecoveryBanner(content);
   if (isDayComplete(state.day, state.week)) {
     const db = document.createElement('div');
     db.className = 'day-complete-banner';
@@ -3269,6 +3451,9 @@ function renderProgressScreen(container) {
   intro.className = 'banner';
   intro.innerHTML = '<strong>Exercise progress - Cycle ' + state.cycle + ':</strong> every exercise you have logged, tracked across weeks and past cycles, even if swapped out of your current plan.';
   content.appendChild(intro);
+
+  renderProgramProgressCard(content);
+  renderWeeklySummaryCard(content);
 
   renderBackupBox(content);
   renderAutoBackupList(content);
