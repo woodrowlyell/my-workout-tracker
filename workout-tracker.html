@@ -301,6 +301,189 @@ function renderGraphControls(container, onChange) {
   container.appendChild(wrap);
 }
 
+/* =========================================================
+   PHASE 6: Achievements
+   New isolated storage key (workout-achievements-v1) holds
+   ONLY a list of unlocked achievement ids - never touches
+   workout-state-v3. Achievements are computed fresh from
+   existing history each render and appended once unlocked;
+   never removed even if later data would no longer qualify.
+   ========================================================= */
+const ACHIEVEMENTS_KEY = 'workout-achievements-v1';
+
+function loadUnlockedAchievements() {
+  try {
+    const raw = localStorage.getItem(ACHIEVEMENTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveUnlockedAchievements(list) {
+  try {
+    localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(list));
+  } catch (e) {
+    // non-critical
+  }
+}
+
+function computeLifetimeCompletedWorkouts() {
+  let count = 0;
+  const orderedDays = getOrderedDayKeys();
+  for (let c = 1; c <= state.cycle; c++) {
+    const totalWeeksForCycle = (c === state.cycle) ? (state.programLength || 8) : 8;
+    for (let w = 1; w <= totalWeeksForCycle; w++) {
+      orderedDays.forEach(function(dayKey) {
+        if (state.activePlan[dayKey].rest) return;
+        if (c < state.cycle || w < state.week || (c === state.cycle && w === state.week)) {
+          if (isDayComplete(dayKey, w)) count++;
+        }
+      });
+    }
+  }
+  return count;
+}
+
+function computeLifetimePRCount() {
+  let prCount = 0;
+  Object.keys(exerciseLibrary).forEach(function(exId) {
+    const ex = exerciseLibrary[exId];
+    if (!ex || ex.noWeight) return;
+    const entries = getAllEntriesForExercise(exId).slice().sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    let runningMax = -Infinity;
+    entries.forEach(function(e) {
+      if (e.weight > runningMax) { prCount++; runningMax = e.weight; }
+    });
+  });
+  return prCount;
+}
+
+function computeLifetimeVolume() {
+  let total = 0;
+  Object.keys(state.activePlan).forEach(function(dayKey) {
+    for (let c = 1; c <= state.cycle; c++) {
+      for (let w = 1; w <= (state.programLength || 8); w++) {
+        const day = state.activePlan[dayKey];
+        (day.exerciseIds || []).forEach(function(exId) {
+          const ex = exerciseLibrary[exId];
+          if (!ex || ex.noWeight) return;
+          const entry = getEntry(dayKey, exId, w, c);
+          if (entry && entry.weight) {
+            const parsed = parseSchemeForVolume(ex.scheme);
+            if (parsed) total += parseFloat(entry.weight) * parsed.sets * parsed.reps;
+          }
+        });
+      }
+    }
+  });
+  return Math.round(total);
+}
+
+function computeCurrentWorkoutStreak() {
+  const completions = getRecentWorkoutCompletions(200); // generous cap, oldest-to-newest
+  let streak = 0;
+  for (let i = completions.length - 1; i >= 0; i--) {
+    if (completions[i]) streak++;
+    else break;
+  }
+  return streak;
+}
+
+const achievementDefinitions = [
+  { id: 'first_workout', label: 'First Workout', desc: 'Completed your first scheduled workout', check: function(stats) { return stats.lifetimeWorkouts >= 1; } },
+  { id: 'ten_workouts', label: '10 Workouts', desc: 'Completed 10 workouts', check: function(stats) { return stats.lifetimeWorkouts >= 10; } },
+  { id: 'fifty_workouts', label: '50 Workouts', desc: 'Completed 50 workouts', check: function(stats) { return stats.lifetimeWorkouts >= 50; } },
+  { id: 'program_completed', label: 'Program Completed', desc: 'Finished a full training program', check: function(stats) { return stats.programsCompleted >= 1; } },
+  { id: 'streak_30', label: '30-Workout Streak', desc: 'Completed 30 scheduled workouts in a row without a miss', check: function(stats) { return stats.currentStreak >= 30; } },
+  { id: 'first_pr', label: 'First Personal Record', desc: 'Set your first logged personal record', check: function(stats) { return stats.lifetimePRs >= 1; } },
+  { id: 'ten_prs', label: '10 Personal Records', desc: 'Set 10 personal records across your lifts', check: function(stats) { return stats.lifetimePRs >= 10; } },
+  { id: 'volume_10k', label: '10,000 lbs Lifted', desc: 'Crossed an estimated 10,000 lbs of total volume', check: function(stats) { return stats.lifetimeVolume >= 10000; } },
+  { id: 'volume_50k', label: '50,000 lbs Lifted', desc: 'Crossed an estimated 50,000 lbs of total volume', check: function(stats) { return stats.lifetimeVolume >= 50000; } },
+  { id: 'volume_100k', label: '100,000 lbs Lifted', desc: 'Crossed an estimated 100,000 lbs of total volume', check: function(stats) { return stats.lifetimeVolume >= 100000; } }
+];
+
+function computeAndSyncAchievements() {
+  const stats = {
+    lifetimeWorkouts: computeLifetimeCompletedWorkouts(),
+    programsCompleted: (state.celebratedCycles || []).length,
+    currentStreak: computeCurrentWorkoutStreak(),
+    lifetimePRs: computeLifetimePRCount(),
+    lifetimeVolume: computeLifetimeVolume()
+  };
+
+  const unlocked = loadUnlockedAchievements();
+  const unlockedSet = {};
+  unlocked.forEach(function(id) { unlockedSet[id] = true; });
+
+  let newlyUnlocked = [];
+  achievementDefinitions.forEach(function(def) {
+    if (!unlockedSet[def.id] && def.check(stats)) {
+      unlockedSet[def.id] = true;
+      newlyUnlocked.push(def.id);
+    }
+  });
+
+  if (newlyUnlocked.length > 0) {
+    saveUnlockedAchievements(Object.keys(unlockedSet));
+  }
+
+  return { unlockedIds: Object.keys(unlockedSet), newlyUnlocked: newlyUnlocked, stats: stats };
+}
+
+function renderAchievementsCard(container) {
+  const result = computeAndSyncAchievements();
+  const unlockedSet = {};
+  result.unlockedIds.forEach(function(id) { unlockedSet[id] = true; });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  wrap.innerHTML = '<p class="ex-name" style="margin-bottom:4px;">Achievements</p><p class="ex-scheme" style="margin-bottom:12px;">' + result.unlockedIds.length + ' of ' + achievementDefinitions.length + ' unlocked</p>';
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;';
+  achievementDefinitions.forEach(function(def) {
+    const isUnlocked = !!unlockedSet[def.id];
+    const badge = document.createElement('div');
+    badge.style.cssText = 'border-radius:10px;padding:10px;border:1px solid ' + (isUnlocked ? '#f0cba4' : '#e6e4dc') + ';background:' + (isUnlocked ? '#fdf0e6' : '#f7f6f2') + ';opacity:' + (isUnlocked ? '1' : '0.55') + ';';
+    badge.innerHTML = '<div style="font-size:18px;margin-bottom:4px;">' + (isUnlocked ? '\ud83c\udfc6' : '\ud83d\udd12') + '</div>' +
+      '<div style="font-size:12px;font-weight:700;color:#1c1c1a;">' + def.label + '</div>' +
+      '<div style="font-size:10px;color:#999;margin-top:2px;">' + def.desc + '</div>';
+    grid.appendChild(badge);
+  });
+  wrap.appendChild(grid);
+  container.appendChild(wrap);
+
+  if (result.newlyUnlocked.length > 0) {
+    const labels = result.newlyUnlocked.map(function(id) {
+      const def = achievementDefinitions.filter(function(d) { return d.id === id; })[0];
+      return def ? def.label : id;
+    });
+    setTimeout(function() { showAchievementUnlockModal(labels); }, 300);
+  }
+}
+
+function showAchievementUnlockModal(labels) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-sheet';
+  sheet.style.textAlign = 'center';
+  sheet.innerHTML = '<div style="font-size:40px;margin-bottom:8px;">\ud83c\udfc6</div><h3>Achievement Unlocked!</h3>' +
+    labels.map(function(l) { return '<div style="font-size:15px;font-weight:700;color:#a1780a;margin-top:4px;">' + l + '</div>'; }).join('');
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'modal-close';
+  closeBtn.style.cssText = 'background:#1c1c1a;color:#fff;margin-top:14px;';
+  closeBtn.textContent = 'Nice!';
+  closeBtn.onclick = function() { document.body.removeChild(overlay); };
+  sheet.appendChild(closeBtn);
+  overlay.appendChild(sheet);
+  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+  document.body.appendChild(overlay);
+}
+
 const onboardingSteps = [
   {
     key: 'secondaryFocus',
