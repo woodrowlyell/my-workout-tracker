@@ -2698,13 +2698,13 @@ function buildLineChart(title, points, color, showPB, opts) {
     btnGroup.style.cssText = 'display:flex;gap:6px;';
     const trendBtn = document.createElement('button');
     trendBtn.textContent = isTrendLineOn(baseChartId) ? 'Trend: On' : 'Trend: Off';
-    trendBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid ' + (isTrendLineOn(baseChartId) ? '#b9cdf0' : '#e6e4dc') + ';background:' + (isTrendLineOn(baseChartId) ? '#eef3fb' : '#f7f6f2') + ';color:' + (isTrendLineOn(baseChartId) ? '#1c3a7a' : '#888') + ';';
+    trendBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid ' + (isTrendLineOn(baseChartId) ? '#b9cdf0' : '#ddd') + ';background:' + (isTrendLineOn(baseChartId) ? '#eef3fb' : '#fff') + ';color:' + (isTrendLineOn(baseChartId) ? '#1c3a7a' : '#1c1c1a') + ';';
     trendBtn.onclick = function() { toggleTrendLine(baseChartId); };
     btnGroup.appendChild(trendBtn);
     if (!isFullscreen) {
       const expandBtn = document.createElement('button');
       expandBtn.textContent = 'Expand';
-      expandBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid #e6e4dc;background:#f7f6f2;color:#888;';
+      expandBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#1c1c1a;';
       expandBtn.onclick = function() {
         const insightsFn = function() { return buildStreakAndPRInsights(filterPointsByRange(points, graphPrefs.range), showPB === true ? true : (showPB === false ? null : showPB)); };
         openFullscreenChart(title, points, color, showPB, insightsFn);
