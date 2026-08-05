@@ -2539,10 +2539,59 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
   return row;
 }
 
-function buildLineChart(title, points, color) {
+/**
+ * PHASE 2b additions (presentation only, no calculation/storage changes):
+ * - Linear regression trend line, toggle persisted per chart-title in graphPrefs
+ * - Personal Best marker (higher-is-better only; opt-in via showPB param)
+ * - Change indicator with arrow + percentage, color coded
+ * - Tap-a-point popover with exact value/label
+ * Chart id is derived from title so different charts can remember their own trend-line toggle.
+ */
+function linearRegression(xs, ys) {
+  const n = xs.length;
+  const sumX = xs.reduce(function(a, b) { return a + b; }, 0);
+  const sumY = ys.reduce(function(a, b) { return a + b; }, 0);
+  const sumXY = xs.reduce(function(a, x, i) { return a + x * ys[i]; }, 0);
+  const sumXX = xs.reduce(function(a, x) { return a + x * x; }, 0);
+  const denom = (n * sumXX - sumX * sumX) || 1;
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+  return { slope: slope, intercept: intercept };
+}
+
+function chartIdFromTitle(title, fallbackSeed) {
+  return 'chart_' + (title || fallbackSeed || 'untitled').replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+function isTrendLineOn(chartId) {
+  return !!(graphPrefs.trendLines && graphPrefs.trendLines[chartId]);
+}
+
+function toggleTrendLine(chartId) {
+  if (!graphPrefs.trendLines) graphPrefs.trendLines = {};
+  graphPrefs.trendLines[chartId] = !graphPrefs.trendLines[chartId];
+  saveGraphPrefs();
+  render();
+}
+
+function buildLineChart(title, points, color, showPB) {
   const wrap = document.createElement('div');
   wrap.className = 'progress-ex-card';
-  if (title) { const h = document.createElement('h4'); h.textContent = title; wrap.appendChild(h); }
+  const chartId = chartIdFromTitle(title, color);
+  if (title) {
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;';
+    const h = document.createElement('h4');
+    h.style.margin = '0';
+    h.textContent = title;
+    headerRow.appendChild(h);
+    const trendBtn = document.createElement('button');
+    trendBtn.textContent = isTrendLineOn(chartId) ? 'Trend: On' : 'Trend: Off';
+    trendBtn.style.cssText = 'font-size:11px;font-weight:600;padding:5px 9px;border-radius:8px;border:1px solid ' + (isTrendLineOn(chartId) ? '#b9cdf0' : '#e6e4dc') + ';background:' + (isTrendLineOn(chartId) ? '#eef3fb' : '#f7f6f2') + ';color:' + (isTrendLineOn(chartId) ? '#1c3a7a' : '#888') + ';';
+    trendBtn.onclick = function() { toggleTrendLine(chartId); };
+    headerRow.appendChild(trendBtn);
+    wrap.appendChild(headerRow);
+  }
 
   // Phase 2a: apply the current time-range filter without touching underlying data/points shape.
   const filteredPoints = filterPointsByRange(points, graphPrefs.range);
@@ -2564,23 +2613,86 @@ function buildLineChart(title, points, color) {
   const min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
   const range = max - min || 1;
   const stepX = (W - pad * 2) / (filteredPoints.length - 1);
+
+  // Find personal best (highest val) among valid points, only when explicitly requested.
+  let pbIndex = -1;
+  if (showPB) {
+    let bestVal = -Infinity;
+    filteredPoints.forEach(function(p, i) {
+      if (p.val !== null && !isNaN(p.val) && p.val > bestVal) { bestVal = p.val; pbIndex = i; }
+    });
+  }
+
   let pathD = '', dots = '', labels = '';
+  const pointCoords = [];
   filteredPoints.forEach(function(p, i) {
-    if (p.val === null || isNaN(p.val)) return;
+    if (p.val === null || isNaN(p.val)) { pointCoords.push(null); return; }
     const x = pad + i * stepX;
     const y = H - pad - ((p.val - min) / range) * (H - pad * 2);
+    pointCoords.push({ x: x, y: y });
     pathD += (pathD ? 'L' : 'M') + x + ',' + y + ' ';
-    dots += '<circle cx="' + x + '" cy="' + y + '" r="4" fill="' + color + '"/>';
+    const isPB = showPB && i === pbIndex;
+    dots += '<circle class="chart-dot" data-idx="' + i + '" cx="' + x + '" cy="' + y + '" r="' + (isPB ? 6 : 4) + '" fill="' + (isPB ? '#ffd700' : color) + '" stroke="' + (isPB ? '#a1780a' : 'none') + '" stroke-width="' + (isPB ? 2 : 0) + '" style="cursor:pointer;"/>';
+    if (isPB) {
+      labels += '<text x="' + x + '" y="' + (y - 18) + '" font-size="12" text-anchor="middle">\u2b50</text>';
+    }
     labels += '<text x="' + x + '" y="' + (H - 6) + '" font-size="10" fill="#999" text-anchor="middle">' + p.label + '</text>';
     labels += '<text x="' + x + '" y="' + (y - 10) + '" font-size="11" fill="#333" text-anchor="middle" font-weight="600">' + p.val + '</text>';
   });
-  wrap.innerHTML += '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '"><path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>' + dots + labels + '</svg>';
+
+  // Trend line: linear regression over index vs val, drawn as dashed line across full width.
+  let trendPath = '';
+  if (isTrendLineOn(chartId)) {
+    const xs = [];
+    const ys = [];
+    filteredPoints.forEach(function(p, i) { if (p.val !== null && !isNaN(p.val)) { xs.push(i); ys.push(p.val); } });
+    if (xs.length >= 2) {
+      const reg = linearRegression(xs, ys);
+      const firstIdx = xs[0], lastIdx = xs[xs.length - 1];
+      const yStart = reg.slope * firstIdx + reg.intercept;
+      const yEnd = reg.slope * lastIdx + reg.intercept;
+      const xStart = pad + firstIdx * stepX;
+      const xEnd = pad + lastIdx * stepX;
+      const plotY = function(v) { return H - pad - ((v - min) / range) * (H - pad * 2); };
+      trendPath = '<line x1="' + xStart + '" y1="' + plotY(yStart) + '" x2="' + xEnd + '" y2="' + plotY(yEnd) + '" stroke="#999" stroke-width="1.5" stroke-dasharray="5,4"/>';
+    }
+  }
+
+  const svgId = chartId + '_svg';
+  wrap.innerHTML += '<svg class="chart" id="' + svgId + '" viewBox="0 0 ' + W + ' ' + H + '">' + trendPath + '<path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>' + dots + labels + '</svg>';
   const first = valid[0].val, last = valid[valid.length - 1].val;
   const diff = (last - first).toFixed(1);
+  const pctChange = first !== 0 ? (((last - first) / Math.abs(first)) * 100).toFixed(1) : null;
+  const isUp = last > first, isDown = last < first;
+  const arrow = isUp ? '\u2191' : (isDown ? '\u2193' : '\u2192');
+  const changeColor = isUp ? '#256029' : (isDown ? '#a11c56' : '#888');
   const stats = document.createElement('div');
   stats.className = 'chart-stats';
-  stats.innerHTML = '<div>Start: <strong>' + first + '</strong></div><div>Latest: <strong>' + last + '</strong></div><div>Change: <strong>' + (diff > 0 ? '+' : '') + diff + '</strong></div>';
+  stats.innerHTML = '<div>Start: <strong>' + first + '</strong></div><div>Latest: <strong>' + last + '</strong></div>' +
+    '<div style="color:' + changeColor + ';">Change: <strong>' + arrow + ' ' + (diff > 0 ? '+' : '') + diff + (pctChange !== null ? ' (' + (pctChange > 0 ? '+' : '') + pctChange + '%)' : '') + '</strong></div>';
   wrap.appendChild(stats);
+
+  // Tap-a-point popover: simple inline detail line that updates on dot click, no external deps.
+  const detailBox = document.createElement('div');
+  detailBox.style.cssText = 'font-size:12px;color:#1c3a7a;background:#eef3fb;border-radius:8px;padding:0;margin-top:0;max-height:0;overflow:hidden;transition:all 0.15s ease;';
+  wrap.appendChild(detailBox);
+
+  setTimeout(function() {
+    const svgEl = wrap.querySelector('#' + svgId);
+    if (!svgEl) return;
+    svgEl.querySelectorAll('.chart-dot').forEach(function(dotEl) {
+      dotEl.addEventListener('click', function() {
+        const idx = parseInt(dotEl.getAttribute('data-idx'), 10);
+        const p = filteredPoints[idx];
+        if (!p) return;
+        const isPBHere = showPB && idx === pbIndex;
+        detailBox.innerHTML = '<div style="padding:8px 10px;">' + p.label + ': <strong>' + p.val + '</strong>' + (isPBHere ? ' \u2b50 Personal Best' : '') + '</div>';
+        detailBox.style.maxHeight = '60px';
+        detailBox.style.marginTop = '8px';
+      });
+    });
+  }, 0);
+
   return wrap;
 }
 
