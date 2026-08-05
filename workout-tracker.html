@@ -2301,6 +2301,128 @@ function isRecoveryWeek(week) {
 }
 
 /* =========================================================
+   PHASE 4: Intelligent Training
+   Pure derivation from existing logged history (weights,
+   completion, steps). No new stored fields, no AI/network
+   calls. Reads only via existing getEntry/getAllEntriesForExercise/
+   isDayComplete - never writes anything new to state.
+   ========================================================= */
+function detectWeightStall(entries) {
+  // entries: chronologically sorted [{week, cycle, weight}, ...] for one exercise
+  if (!entries || entries.length < 3) return null;
+  const lastThree = entries.slice(-3);
+  const netChange = lastThree[2].weight - lastThree[0].weight;
+  if (netChange <= 0) return { last3: lastThree.map(function(e) { return e.weight; }) };
+  return null;
+}
+
+/**
+ * Wraps the existing getProgressionSuggestion() output: if the last 3 logged
+ * sessions show no net progress, surface a deload recommendation instead.
+ * If there's not enough history, or the lift is progressing, the original
+ * suggestion from getProgressionSuggestion is returned unchanged.
+ */
+function getIntelligentSuggestion(dayKey, exId, week, baseSuggestion) {
+  const entries = getAllEntriesForExercise(exId)
+    .filter(function(e) { return e.dayKey === dayKey; })
+    .sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+  const stall = detectWeightStall(entries);
+  if (stall) {
+    return {
+      type: 'deload',
+      text: 'No progress the last 3 sessions (' + stall.last3.join(' \u2192 ') + ' lbs). Consider a deload \u2014 drop 10\u201315% and rebuild, or take extra rest before this lift.'
+    };
+  }
+  return baseSuggestion;
+}
+
+/**
+ * Walks backward through scheduled (non-rest) workout days across weeks/cycles,
+ * starting from the currently viewed week, collecting up to n completion booleans.
+ * Used only for Recovery Recommendations - read-only, no state mutation.
+ */
+function getRecentWorkoutCompletions(n) {
+  const results = [];
+  const orderedDays = getOrderedDayKeys();
+  let cycle = state.viewingCycle;
+  let week = state.week;
+  let dayIdx = orderedDays.length - 1;
+  let safetyCounter = 0;
+  while (results.length < n && safetyCounter < 500) {
+    safetyCounter++;
+    if (dayIdx < 0) {
+      week -= 1;
+      dayIdx = orderedDays.length - 1;
+      if (week < 1) {
+        cycle -= 1;
+        week = state.programLength || 8;
+        if (cycle < 1) break;
+      }
+    }
+    const dayKey = orderedDays[dayIdx];
+    const dayDef = getEffectiveDay(dayKey, cycle, week);
+    if (dayDef && !dayDef.rest) {
+      const hasAnyEntry = (dayDef.exerciseIds || []).some(function(exId) { return !!getEntry(dayKey, exId, week, cycle); });
+      if (hasAnyEntry || cycle < state.cycle || week < state.week) {
+        results.push(isDayComplete(dayKey, week));
+      }
+    }
+    dayIdx -= 1;
+  }
+  return results.reverse();
+}
+
+function getRecentStepsEntries(n) {
+  const all = [];
+  Object.keys(state.activePlan).forEach(function(dayKey) {
+    for (let c = 1; c <= state.cycle; c++) {
+      for (let w = 1; w <= (state.programLength || 8); w++) {
+        const e = getEntry(dayKey, '__steps__', w, c);
+        if (e && e.weight) all.push({ cycle: c, week: w, dayKey: dayKey, steps: parseFloat(e.weight) });
+      }
+    }
+  });
+  all.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+  return all.slice(-n).map(function(e) { return e.steps; });
+}
+
+function generateRecoveryRecommendations() {
+  const recommendations = [];
+  const completions = getRecentWorkoutCompletions(5);
+  const missedCount = completions.filter(function(c) { return !c; }).length;
+  if (completions.length >= 4 && missedCount >= 2) {
+    recommendations.push('You\u2019ve missed ' + missedCount + ' of your last ' + completions.length + ' scheduled workouts. Consider an easier session today, or use the time options above to fit in a shorter one.');
+  }
+  const recentSteps = getRecentStepsEntries(5);
+  if (recentSteps.length >= 3) {
+    const avg = recentSteps.reduce(function(a, b) { return a + b; }, 0) / recentSteps.length;
+    const latest = recentSteps[recentSteps.length - 1];
+    if (latest < avg * 0.5) {
+      recommendations.push('Your recent step count has dropped well below your average \u2014 this can be a sign of fatigue. Prioritize rest today if you\u2019re feeling run down.');
+    }
+  }
+  return recommendations;
+}
+
+function renderRecoveryBanner(container) {
+  const recs = generateRecoveryRecommendations();
+  if (recs.length === 0) return;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'background:#eef3fb;border:1px solid #b9cdf0;border-radius:12px;padding:12px 14px;margin-bottom:14px;';
+  const label = document.createElement('div');
+  label.style.cssText = 'font-size:13px;font-weight:700;color:#1c3a7a;margin-bottom:6px;';
+  label.textContent = 'Recovery check-in';
+  wrap.appendChild(label);
+  recs.forEach(function(text) {
+    const line = document.createElement('div');
+    line.style.cssText = 'font-size:12px;color:#1c3a7a;margin-top:4px;';
+    line.textContent = text;
+    wrap.appendChild(line);
+  });
+  container.appendChild(wrap);
+}
+
+/* =========================================================
    PHASE 3: Smart Daily Workout Adaptation
    Today-only, non-destructive. Never touches state.activePlan
    or any stored program data. Stored separately and keyed by
@@ -2543,11 +2665,13 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   card.appendChild(row);
   if (state.programRecoveryPref) {
     const prevForSuggestion = getPrevEntry(dayKey, exId, state.week);
-    const suggestion = getProgressionSuggestion(ex.scheme, state.week, state.programRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
+    const baseSuggestion = getProgressionSuggestion(ex.scheme, state.week, state.programRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
+    const suggestion = getIntelligentSuggestion(dayKey, exId, state.week, baseSuggestion);
     if (suggestion) {
       const sugRow = document.createElement('div');
-      sugRow.style.cssText = 'font-size:12px;color:#1c3a7a;background:#eef3fb;border-radius:6px;padding:6px 8px;margin-top:8px;';
-      sugRow.textContent = 'Suggested: ' + suggestion.text;
+      const isDeload = suggestion.type === 'deload';
+      sugRow.style.cssText = 'font-size:12px;color:' + (isDeload ? '#7a4a1c' : '#1c3a7a') + ';background:' + (isDeload ? '#fdf0e6' : '#eef3fb') + ';border-radius:6px;padding:6px 8px;margin-top:8px;';
+      sugRow.textContent = (isDeload ? '' : 'Suggested: ') + suggestion.text;
       card.appendChild(sugRow);
     }
   }
