@@ -1421,9 +1421,22 @@ function isDayComplete(dayKey, week) {
   if (!mob || !mob.done) return false;
   const cardio = getEntry(dayKey, '__cardio_' + dayKey + '__', week);
   if (!cardio || !cardio.done) return false;
-  if (!day.exerciseIds || day.exerciseIds.length === 0) return true;
-  for (let i = 0; i < day.exerciseIds.length; i++) {
-    const exId = day.exerciseIds[i];
+  // Phase 3: if this is TODAY's occurrence of this day (matching cycle/week being viewed),
+  // and a time-adaptation is active, completion is judged against the adapted (trimmed)
+  // exercise list, since the user physically cannot log the cut exercises today. Past/other
+  // days always use the full, unadapted list so history and streaks stay accurate.
+  let exerciseIdsForCompletion = day.exerciseIds;
+  const isTodayOccurrence = (week === state.week) && (state.viewingCycle === state.cycle);
+  if (isTodayOccurrence) {
+    const choice = getTodaysAdaptChoice(dayKey);
+    if (choice && ADAPT_TIME_BUDGETS[choice] && day.exerciseIds && day.exerciseIds.length > 0) {
+      const adaptResult = adaptWorkoutToTime(day, ADAPT_TIME_BUDGETS[choice]);
+      exerciseIdsForCompletion = adaptResult.includedIds;
+    }
+  }
+  if (!exerciseIdsForCompletion || exerciseIdsForCompletion.length === 0) return true;
+  for (let i = 0; i < exerciseIdsForCompletion.length; i++) {
+    const exId = exerciseIdsForCompletion[i];
     const ex = exerciseLibrary[exId];
     const e = getEntry(dayKey, exId, week);
     if (ex.noWeight) { if (!e || !e.done) return false; }
@@ -2287,6 +2300,185 @@ function isRecoveryWeek(week) {
   return week > 1 && (week - 1) % 4 === 0;
 }
 
+/* =========================================================
+   PHASE 3: Smart Daily Workout Adaptation
+   Today-only, non-destructive. Never touches state.activePlan
+   or any stored program data. Stored separately and keyed by
+   date, so it silently expires when the day changes.
+   ========================================================= */
+const DAILY_ADAPT_KEY = 'workout-daily-adapt-v1';
+
+function loadDailyAdaptState() {
+  try {
+    const raw = localStorage.getItem(DAILY_ADAPT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveDailyAdaptState(obj) {
+  try {
+    localStorage.setItem(DAILY_ADAPT_KEY, JSON.stringify(obj));
+  } catch (e) {
+    // non-critical
+  }
+}
+
+function dailyAdaptKeyFor(dayKey) {
+  return todayStr() + '::' + state.viewingCycle + '::' + state.week + '::' + dayKey;
+}
+
+function getTodaysAdaptChoice(dayKey) {
+  const all = loadDailyAdaptState();
+  return all[dailyAdaptKeyFor(dayKey)] || null; // null = 'Planned Workout' (no adaptation)
+}
+
+function setTodaysAdaptChoice(dayKey, choice) {
+  const all = loadDailyAdaptState();
+  const key = dailyAdaptKeyFor(dayKey);
+  if (!choice || choice === 'planned') {
+    delete all[key];
+  } else {
+    all[key] = choice;
+  }
+  saveDailyAdaptState(all);
+  // Opportunistically clean out old-date entries so this key doesn't grow forever
+  const today = todayStr();
+  Object.keys(all).forEach(function(k) {
+    if (k.indexOf(today + '::') !== 0) delete all[k];
+  });
+  saveDailyAdaptState(all);
+}
+
+const ADAPT_TIME_BUDGETS = { '15min': 15, '30min': 30, '45min': 45 };
+
+const compoundPatterns = [
+  'squat', 'deadlift', 'rdl', 'press', 'row', 'pulldown', 'pull_up', 'pullup',
+  'hip_thrust', 'lunge', 'chin_up', 'chinup', 'clean', 'thrust'
+];
+const accessoryPatterns = [
+  'curl', 'raise', 'extension', 'kickback', 'fly', 'flye', 'crunch',
+  'plank', 'lateral_raise', 'rear_delt', 'face_pull',
+  'woodchop', 'rotation', 'shrug', 'abductor', 'adductor'
+];
+
+function classifyExerciseForAdaptation(exId) {
+  const ex = exerciseLibrary[exId];
+  if (!ex) return 'accessory';
+  const combined = (exId + ' ' + (ex.name || '')).toLowerCase();
+  for (let i = 0; i < compoundPatterns.length; i++) { if (combined.indexOf(compoundPatterns[i]) !== -1) return 'compound'; }
+  for (let i = 0; i < accessoryPatterns.length; i++) { if (combined.indexOf(accessoryPatterns[i]) !== -1) return 'accessory'; }
+  return 'accessory';
+}
+
+function estimateExerciseMinutes(exId) {
+  const ex = exerciseLibrary[exId];
+  const scheme = ex ? ex.scheme : null;
+  const match = (scheme || '').match(/(\d+)\s*x\s*(\d+)/);
+  const sets = match ? parseInt(match[1], 10) : 3;
+  return 1 + (sets * 1.5);
+}
+
+const DAILY_ADAPT_FIXED_OVERHEAD_MINUTES = 10;
+
+function adaptWorkoutToTime(day, budgetMinutes) {
+  if (!day.exerciseIds || day.exerciseIds.length === 0) {
+    return { includedIds: [], cutIds: [], estimatedMinutes: DAILY_ADAPT_FIXED_OVERHEAD_MINUTES };
+  }
+  const items = day.exerciseIds.map(function(exId, idx) {
+    return { exId: exId, idx: idx, minutes: estimateExerciseMinutes(exId), type: classifyExerciseForAdaptation(exId) };
+  });
+  const totalNeeded = DAILY_ADAPT_FIXED_OVERHEAD_MINUTES + items.reduce(function(a, i) { return a + i.minutes; }, 0);
+  if (totalNeeded <= budgetMinutes) {
+    return { includedIds: day.exerciseIds.slice(), cutIds: [], estimatedMinutes: totalNeeded };
+  }
+  const accessoryIndices = items.filter(function(i) { return i.type === 'accessory'; }).map(function(i) { return i.idx; }).sort(function(a, b) { return b - a; });
+  const compoundIndices = items.filter(function(i) { return i.type === 'compound'; }).map(function(i) { return i.idx; }).sort(function(a, b) { return b - a; });
+  const cutOrder = accessoryIndices.concat(compoundIndices);
+  const cutSet = {};
+  let cutCount = 0;
+  let runningMinutes = totalNeeded;
+  for (let i = 0; i < cutOrder.length; i++) {
+    const idx = cutOrder[i];
+    if (runningMinutes <= budgetMinutes) break;
+    if (items.length - cutCount <= 1) break;
+    cutSet[idx] = true;
+    cutCount++;
+    runningMinutes -= items[idx].minutes;
+  }
+  const includedIds = items.filter(function(i) { return !cutSet[i.idx]; }).map(function(i) { return i.exId; });
+  const cutIds = items.filter(function(i) { return !!cutSet[i.idx]; }).map(function(i) { return i.exId; });
+  return { includedIds: includedIds, cutIds: cutIds, estimatedMinutes: runningMinutes };
+}
+
+/**
+ * Returns the effective day object to render today, with exerciseIds
+ * possibly trimmed for time. Does NOT mutate state.activePlan or any
+ * stored day object - returns a shallow copy when adaptation is active.
+ */
+function getAdaptedDay(dayKey) {
+  const baseDay = getEffectiveDay(dayKey);
+  if (!baseDay || baseDay.rest) return { day: baseDay, cutIds: [], choice: null };
+  const choice = getTodaysAdaptChoice(dayKey);
+  if (!choice || !ADAPT_TIME_BUDGETS[choice]) {
+    return { day: baseDay, cutIds: [], choice: null };
+  }
+  const budget = ADAPT_TIME_BUDGETS[choice];
+  const result = adaptWorkoutToTime(baseDay, budget);
+  const adaptedDay = Object.assign({}, baseDay, { exerciseIds: result.includedIds });
+  return { day: adaptedDay, cutIds: result.cutIds, choice: choice, estimatedMinutes: result.estimatedMinutes };
+}
+
+function renderDailyAdaptBanner(container, dayKey, cutIds) {
+  const currentChoice = getTodaysAdaptChoice(dayKey);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'background:#fff;border:1px solid #e6e4dc;border-radius:12px;padding:12px 14px;margin-bottom:14px;';
+
+  const label = document.createElement('div');
+  label.style.cssText = 'font-size:13px;font-weight:700;color:#1c1c1a;margin-bottom:8px;';
+  label.textContent = 'Short on time today?';
+  wrap.appendChild(label);
+
+  const optionsRow = document.createElement('div');
+  optionsRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+  const options = [
+    { key: 'planned', label: 'Planned Workout' },
+    { key: '15min', label: '15 Min' },
+    { key: '30min', label: '30 Min' },
+    { key: '45min', label: '45 Min' }
+  ];
+  options.forEach(function(opt) {
+    const isActive = (opt.key === 'planned' && !currentChoice) || (currentChoice === opt.key);
+    const btn = document.createElement('button');
+    btn.textContent = opt.label;
+    btn.style.cssText = 'padding:7px 11px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid ' + (isActive ? '#e8722c' : '#ddd') + ';background:' + (isActive ? '#fdf0e6' : '#fff') + ';color:' + (isActive ? '#7a4a1c' : '#1c1c1a') + ';';
+    btn.onclick = function() {
+      setTodaysAdaptChoice(dayKey, opt.key === 'planned' ? null : opt.key);
+      render();
+    };
+    optionsRow.appendChild(btn);
+  });
+  wrap.appendChild(optionsRow);
+
+  if (currentChoice && cutIds && cutIds.length > 0) {
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:12px;color:#7a4a1c;background:#fdf0e6;border-radius:8px;padding:8px 10px;margin-top:10px;';
+    const cutNames = cutIds.map(function(id) { return exerciseLibrary[id] ? exerciseLibrary[id].name : id; }).join(', ');
+    note.textContent = 'Trimmed for time today: ' + cutNames + '. Your full plan resumes automatically tomorrow \u2014 nothing is changed permanently.';
+    wrap.appendChild(note);
+  } else if (currentChoice) {
+    const note = document.createElement('div');
+    note.style.cssText = 'font-size:12px;color:#666;margin-top:10px;';
+    note.textContent = 'Everything fits in ' + ADAPT_TIME_BUDGETS[currentChoice] + ' minutes today \u2014 nothing needed to be cut.';
+    wrap.appendChild(note);
+  }
+
+  container.appendChild(wrap);
+}
+
 function renderExerciseCard(dayKey, exId, exIndex) {
   const ex = exerciseLibrary[exId];
   const day = state.activePlan[dayKey];
@@ -2450,7 +2642,8 @@ function renderDayContent(container) {
     recoveryBanner.textContent = 'This is typically a lighter week. Consider trimming a set or two, or using a lighter weight, if you are feeling fatigued.';
     content.appendChild(recoveryBanner);
   }
-  const day = getEffectiveDay(state.day);
+  const adapted = getAdaptedDay(state.day);
+  const day = adapted.day;
   if (day.rest) {
     const banner = document.createElement('div');
     banner.className = 'rest-note';
@@ -2466,6 +2659,7 @@ function renderDayContent(container) {
     container.appendChild(content);
     return;
   }
+  renderDailyAdaptBanner(content, state.day, adapted.cutIds);
   if (isDayComplete(state.day, state.week)) {
     const db = document.createElement('div');
     db.className = 'day-complete-banner';
