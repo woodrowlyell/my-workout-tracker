@@ -484,6 +484,329 @@ function showAchievementUnlockModal(labels) {
   document.body.appendChild(overlay);
 }
 
+/* =========================================================
+   PHASE 7: Sharing & Export
+   User-curated "brag card": pick which stats to show, generate
+   a canvas image, share/download it. No new stored fields
+   except one small UI preference (include-link toggle state),
+   isolated in its own key. Never touches workout-state-v3.
+   ========================================================= */
+const SHARE_PREFS_KEY = 'workout-share-prefs-v1';
+const APP_DISPLAY_NAME = 'My Workout Planner';
+const APP_SHARE_URL = 'https://woodrowlyell.github.io/my-workout-tracker/';
+
+function loadSharePrefs() {
+  try {
+    const raw = localStorage.getItem(SHARE_PREFS_KEY);
+    if (!raw) return { includeLink: true };
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? Object.assign({ includeLink: true }, parsed) : { includeLink: true };
+  } catch (e) {
+    return { includeLink: true };
+  }
+}
+
+function saveSharePrefs(prefs) {
+  try { localStorage.setItem(SHARE_PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+}
+
+function collectShareableStrengthGains() {
+  const candidates = [];
+  Object.keys(exerciseLibrary).forEach(function(exId) {
+    const ex = exerciseLibrary[exId];
+    if (!ex || ex.noWeight) return;
+    const entries = getAllEntriesForExercise(exId).slice().sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    if (entries.length < 2) return;
+    const first = entries[0];
+    const best = entries.reduce(function(m, e) { return e.weight > m.weight ? e : m; }, entries[0]);
+    if (best.weight <= first.weight) return;
+    candidates.push({
+      id: 'strength_' + exId,
+      category: 'Strength Gains',
+      label: ex.name,
+      text: ex.name + ': ' + first.weight + ' \u2192 ' + best.weight + ' lbs'
+    });
+  });
+  return candidates;
+}
+
+function collectShareableMeasurements() {
+  const candidates = [];
+  const defs = [
+    { key: 'weight', label: 'Weight', unit: 'lbs', lowerIsBetter: true },
+    { key: 'waist', label: 'Waist', unit: 'in', lowerIsBetter: true },
+    { key: 'hips', label: 'Hips', unit: 'in', lowerIsBetter: true }
+  ];
+  const allSets = (state.archivedCheckpoints || []).concat([{ cycle: state.cycle, start: state.checkpoints.start, week4: state.checkpoints.week4, week8: state.checkpoints.week8 }]);
+  defs.forEach(function(def) {
+    const points = [];
+    allSets.forEach(function(set) {
+      ['start', 'week4', 'week8', 'week12'].forEach(function(k) {
+        if (set[k] && set[k][def.key]) points.push(parseFloat(set[k][def.key]));
+      });
+    });
+    if (points.length < 2) return;
+    const diff = points[points.length - 1] - points[0];
+    const isImprovement = def.lowerIsBetter ? diff < 0 : diff > 0;
+    if (!isImprovement) return;
+    candidates.push({
+      id: 'measurement_' + def.key,
+      category: 'Body Measurements',
+      label: def.label,
+      text: def.label + ': ' + Math.abs(diff).toFixed(1) + ' ' + def.unit + ' ' + (def.lowerIsBetter ? 'lost' : 'gained')
+    });
+  });
+  return candidates;
+}
+
+function collectShareableProgramStats() {
+  const candidates = [];
+  const streak = computeCurrentWorkoutStreak();
+  if (streak >= 3) {
+    candidates.push({ id: 'streak', category: 'Program Stats', label: 'Current Streak', text: streak + '-workout streak' });
+  }
+  const lifetimeWorkouts = computeLifetimeCompletedWorkouts();
+  if (lifetimeWorkouts >= 1) {
+    candidates.push({ id: 'total_workouts', category: 'Program Stats', label: 'Total Workouts', text: lifetimeWorkouts + ' workouts completed' });
+  }
+  const progress = computeProgramProgress();
+  if (progress.percentComplete > 0) {
+    candidates.push({ id: 'percent_complete', category: 'Program Stats', label: 'Program Progress', text: progress.percentComplete + '% through current program' });
+  }
+  return candidates;
+}
+
+function collectShareableAchievements() {
+  const unlocked = loadUnlockedAchievements();
+  const unlockedSet = {};
+  unlocked.forEach(function(id) { unlockedSet[id] = true; });
+  return achievementDefinitions
+    .filter(function(def) { return unlockedSet[def.id]; })
+    .map(function(def) { return { id: 'achievement_' + def.id, category: 'Achievements', label: def.label, text: '\ud83c\udfc6 ' + def.label }; });
+}
+
+function collectAllShareCandidates() {
+  return [].concat(
+    collectShareableStrengthGains(),
+    collectShareableMeasurements(),
+    collectShareableProgramStats(),
+    collectShareableAchievements()
+  );
+}
+
+function drawShareCard(canvas, selectedItems, includeLink) {
+  const ctx = canvas.getContext('2d');
+  const W = 600, H = 750;
+  canvas.width = W;
+  canvas.height = H;
+
+  ctx.fillStyle = '#1c1c1a';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#e8722c';
+  ctx.fillRect(0, 0, W, 8);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 30px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('My Progress', W / 2, 70);
+
+  ctx.fillStyle = '#b8b7b0';
+  ctx.font = '600 14px -apple-system, sans-serif';
+  ctx.fillText(new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' }), W / 2, 96);
+
+  let y = 150;
+  const grouped = {};
+  selectedItems.forEach(function(item) {
+    if (!grouped[item.category]) grouped[item.category] = [];
+    grouped[item.category].push(item);
+  });
+
+  Object.keys(grouped).forEach(function(cat) {
+    ctx.fillStyle = '#e8722c';
+    ctx.font = '700 13px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(cat.toUpperCase(), 40, y);
+    y += 30;
+    grouped[cat].forEach(function(item) {
+      ctx.fillStyle = '#fff';
+      ctx.font = '600 20px -apple-system, sans-serif';
+      ctx.fillText(item.text, 40, y);
+      y += 36;
+    });
+    y += 14;
+  });
+
+  if (includeLink) {
+    ctx.fillStyle = '#666';
+    ctx.font = '600 13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(APP_DISPLAY_NAME, W / 2, H - 30);
+  }
+}
+
+function buildShareText(selectedItems, includeLink) {
+  let text = selectedItems.map(function(i) { return i.text; }).join('\n');
+  if (includeLink) {
+    text += '\n\n' + APP_DISPLAY_NAME + ': ' + APP_SHARE_URL;
+  }
+  return text;
+}
+
+function canvasToBlob(canvas) {
+  return new Promise(function(resolve) {
+    canvas.toBlob(function(blob) { resolve(blob); }, 'image/png');
+  });
+}
+
+async function shareCard(canvas, selectedItems, includeLink) {
+  const shareText = buildShareText(selectedItems, includeLink);
+  try {
+    const blob = await canvasToBlob(canvas);
+    const file = new File([blob], 'my-progress.png', { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], text: shareText, title: 'My Progress' });
+      return;
+    }
+  } catch (e) {
+    // fall through to download fallback below
+  }
+  // Fallback: download the image directly
+  try {
+    const blob = await canvasToBlob(canvas);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'my-progress.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    toast('Image downloaded \u2014 share it from your Photos/Downloads');
+  } catch (e2) {
+    toast('Could not generate image: ' + e2.message);
+  }
+}
+
+function copyShareTextToClipboard(selectedItems, includeLink) {
+  const text = buildShareText(selectedItems, includeLink);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() { toast('Copied to clipboard'); }, function() {
+      showManualCopyBox(text);
+    });
+  } else {
+    showManualCopyBox(text);
+  }
+}
+
+function renderShareScreen(container) {
+  const content = document.createElement('div');
+  content.className = 'content';
+
+  const intro = document.createElement('div');
+  intro.className = 'banner';
+  intro.innerHTML = '<strong>Share your progress:</strong> pick the stats you want to show off, then share or download your card. Nothing is shared automatically \u2014 you choose exactly what goes on it.';
+  content.appendChild(intro);
+
+  const candidates = collectAllShareCandidates();
+  const prefs = loadSharePrefs();
+  const selectedIds = {};
+  candidates.forEach(function(c) { selectedIds[c.id] = true; }); // default: everything available is pre-selected
+
+  if (candidates.length === 0) {
+    const nd = document.createElement('div');
+    nd.className = 'rest-note';
+    nd.textContent = 'Nothing to share yet \u2014 log a few more weeks of progress and check back here.';
+    content.appendChild(nd);
+    container.appendChild(content);
+    return;
+  }
+
+  const canvasWrap = document.createElement('div');
+  canvasWrap.style.cssText = 'display:flex;justify-content:center;margin-bottom:16px;';
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'width:100%;max-width:320px;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.15);';
+  canvasWrap.appendChild(canvas);
+  content.appendChild(canvasWrap);
+
+  const linkToggleRow = document.createElement('div');
+  linkToggleRow.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 12px;background:#fff;border:1px solid #e6e4dc;border-radius:10px;';
+  const linkCheckbox = document.createElement('input');
+  linkCheckbox.type = 'checkbox';
+  linkCheckbox.checked = prefs.includeLink;
+  linkCheckbox.style.cssText = 'width:20px;height:20px;accent-color:#e8722c;';
+  const linkLabel = document.createElement('label');
+  linkLabel.style.cssText = 'font-size:13px;color:#555;font-weight:600;';
+  linkLabel.textContent = 'Include "' + APP_DISPLAY_NAME + '" link';
+  linkToggleRow.appendChild(linkCheckbox);
+  linkToggleRow.appendChild(linkLabel);
+  content.appendChild(linkToggleRow);
+
+  const grouped = {};
+  candidates.forEach(function(c) {
+    if (!grouped[c.category]) grouped[c.category] = [];
+    grouped[c.category].push(c);
+  });
+
+  function redraw() {
+    const selected = candidates.filter(function(c) { return selectedIds[c.id]; });
+    drawShareCard(canvas, selected, linkCheckbox.checked);
+  }
+
+  Object.keys(grouped).forEach(function(cat) {
+    const catLabel = document.createElement('div');
+    catLabel.className = 'section-label';
+    catLabel.textContent = cat;
+    content.appendChild(catLabel);
+    grouped[cat].forEach(function(item) {
+      const row = document.createElement('div');
+      row.className = 'card';
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true;
+      cb.style.cssText = 'width:20px;height:20px;accent-color:#e8722c;flex-shrink:0;';
+      cb.onchange = function() { selectedIds[item.id] = cb.checked; redraw(); };
+      const lbl = document.createElement('span');
+      lbl.style.cssText = 'font-size:14px;';
+      lbl.textContent = item.text;
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      content.appendChild(row);
+    });
+  });
+
+  linkCheckbox.onchange = function() {
+    saveSharePrefs({ includeLink: linkCheckbox.checked });
+    redraw();
+  };
+
+  const actionsRow = document.createElement('div');
+  actionsRow.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
+  const shareBtn = document.createElement('button');
+  shareBtn.textContent = 'Share Image';
+  shareBtn.style.cssText = 'flex:1;padding:12px;background:#e8722c;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;';
+  shareBtn.onclick = function() {
+    const selected = candidates.filter(function(c) { return selectedIds[c.id]; });
+    if (selected.length === 0) { toast('Select at least one stat first'); return; }
+    shareCard(canvas, selected, linkCheckbox.checked);
+  };
+  actionsRow.appendChild(shareBtn);
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = 'Copy as Text';
+  copyBtn.style.cssText = 'flex:1;padding:12px;background:#eef3fb;color:#1c3a7a;border:1px solid #b9cdf0;border-radius:10px;font-size:14px;font-weight:700;';
+  copyBtn.onclick = function() {
+    const selected = candidates.filter(function(c) { return selectedIds[c.id]; });
+    if (selected.length === 0) { toast('Select at least one stat first'); return; }
+    copyShareTextToClipboard(selected, linkCheckbox.checked);
+  };
+  actionsRow.appendChild(copyBtn);
+  content.appendChild(actionsRow);
+
+  redraw();
+  container.appendChild(content);
+}
+
 const onboardingSteps = [
   {
     key: 'secondaryFocus',
