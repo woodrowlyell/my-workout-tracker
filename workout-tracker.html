@@ -82,6 +82,12 @@
   .restore-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
   .restore-box { background: #fff; border-radius: 16px; padding: 20px; max-width: 480px; width: 100%; max-height: 80vh; overflow-y: auto; }
   .restore-box textarea { width: 100%; min-height: 160px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; font-size: 11px; margin-bottom: 12px; }
+
+  /* --- Phase 2a: graph filter controls --- */
+  .graph-controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .graph-control-group { display: flex; background: #f0efe9; border-radius: 10px; padding: 3px; gap: 2px; }
+  .graph-control-btn { padding: 7px 11px; border: none; background: transparent; border-radius: 8px; font-size: 12px; font-weight: 600; color: #777; }
+  .graph-control-btn.active { background: #fff; color: #1c1c1a; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
 </style>
 </head>
 <body>
@@ -206,6 +212,93 @@ let state = {
   programPriority: null,
   weeklyOverrides: {}
 };
+
+/* =========================================================
+   PHASE 2a: Graph preferences (separate storage key)
+   This NEVER touches state / workout-state-v3.
+   ========================================================= */
+const GRAPH_PREFS_KEY = 'workout-graph-prefs-v1';
+let graphPrefs = {
+  range: 'all',   // '30d' | 'program' | 'all'
+  view: 'compact' // 'compact' | 'detailed'  (view mode wired up in 2b)
+};
+
+function loadGraphPrefs() {
+  try {
+    const raw = localStorage.getItem(GRAPH_PREFS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        graphPrefs = Object.assign({}, graphPrefs, parsed);
+      }
+    }
+  } catch (e) {
+    // ignore corrupt prefs, fall back to defaults
+  }
+}
+
+function saveGraphPrefs() {
+  try {
+    localStorage.setItem(GRAPH_PREFS_KEY, JSON.stringify(graphPrefs));
+  } catch (e) {
+    // non-critical; silently ignore
+  }
+}
+
+function setGraphRange(range) {
+  if (graphPrefs.range === range) return;
+  graphPrefs.range = range;
+  saveGraphPrefs();
+  render();
+}
+
+/**
+ * Filters an array of {label, val, week, cycle, dateSort} style points
+ * down to a time range, WITHOUT altering how points are built or stored.
+ * Points that don't carry week/cycle (e.g. pre-existing shapes) pass through
+ * unfiltered so nothing existing can break.
+ */
+function filterPointsByRange(points, range) {
+  if (!range || range === 'all') return points;
+  if (!points || points.length === 0) return points;
+  const hasWeekCycle = points.every(function(p) { return typeof p.week === 'number' && typeof p.cycle === 'number'; });
+  if (!hasWeekCycle) return points; // safety fallback: don't filter shapes we don't recognize
+
+  if (range === 'program') {
+    return points.filter(function(p) { return p.cycle === state.viewingCycle; });
+  }
+  if (range === '30d') {
+    // Approximate "last 30 days" as the last ~4-5 weeks of the currently viewed cycle,
+    // since points are week-indexed rather than date-indexed by nature of the existing data model.
+    const weeksBack = 4;
+    const sameCycle = points.filter(function(p) { return p.cycle === state.viewingCycle; });
+    if (sameCycle.length === 0) return points;
+    const maxWeek = Math.max.apply(null, sameCycle.map(function(p) { return p.week; }));
+    return sameCycle.filter(function(p) { return p.week > maxWeek - weeksBack; });
+  }
+  return points;
+}
+
+function renderGraphControls(container, onChange) {
+  const wrap = document.createElement('div');
+  wrap.className = 'graph-controls';
+
+  const rangeGroup = document.createElement('div');
+  rangeGroup.className = 'graph-control-group';
+  [
+    { key: '30d', label: '30 Days' },
+    { key: 'program', label: 'This Program' },
+    { key: 'all', label: 'All Time' }
+  ].forEach(function(opt) {
+    const btn = document.createElement('button');
+    btn.className = 'graph-control-btn' + (graphPrefs.range === opt.key ? ' active' : '');
+    btn.textContent = opt.label;
+    btn.onclick = function() { setGraphRange(opt.key); if (onChange) onChange(); };
+    rangeGroup.appendChild(btn);
+  });
+  wrap.appendChild(rangeGroup);
+  container.appendChild(wrap);
+}
 
 const onboardingSteps = [
   {
@@ -929,6 +1022,7 @@ async function loadProgramData() {
 }
 
 async function loadState() {
+  loadGraphPrefs();
   const dataOk = await loadProgramData();
   if (!dataOk) return;
   try {
@@ -2449,11 +2543,19 @@ function buildLineChart(title, points, color) {
   const wrap = document.createElement('div');
   wrap.className = 'progress-ex-card';
   if (title) { const h = document.createElement('h4'); h.textContent = title; wrap.appendChild(h); }
-  const valid = points.filter(function(p) { return p.val !== null && !isNaN(p.val); });
+
+  // Phase 2a: apply the current time-range filter without touching underlying data/points shape.
+  const filteredPoints = filterPointsByRange(points, graphPrefs.range);
+
+  const valid = filteredPoints.filter(function(p) { return p.val !== null && !isNaN(p.val); });
   if (valid.length < 2) {
     const nd = document.createElement('div');
     nd.className = 'no-data';
-    nd.textContent = valid.length === 0 ? 'No data entered yet' : 'Need at least 2 data points to graph';
+    if (points.length > 0 && filteredPoints.length === 0) {
+      nd.textContent = 'No data in this time range \u2014 try All Time';
+    } else {
+      nd.textContent = valid.length === 0 ? 'No data entered yet' : 'Need at least 2 data points to graph';
+    }
     wrap.appendChild(nd);
     return wrap;
   }
@@ -2461,9 +2563,9 @@ function buildLineChart(title, points, color) {
   const vals = valid.map(function(p) { return p.val; });
   const min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
   const range = max - min || 1;
-  const stepX = (W - pad * 2) / (points.length - 1);
+  const stepX = (W - pad * 2) / (filteredPoints.length - 1);
   let pathD = '', dots = '', labels = '';
-  points.forEach(function(p, i) {
+  filteredPoints.forEach(function(p, i) {
     if (p.val === null || isNaN(p.val)) return;
     const x = pad + i * stepX;
     const y = H - pad - ((p.val - min) / range) * (H - pad * 2);
@@ -2592,18 +2694,19 @@ function renderCheckpointsScreen(container) {
   measLabel.className = 'section-label';
   measLabel.textContent = 'Measurement trend (all cycles)';
   content.appendChild(measLabel);
+  renderGraphControls(content);
   let allPoints = [];
   (state.archivedCheckpoints || []).forEach(function(arch) {
     defs.forEach(function(def) {
-      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null, hips: parseFloat(arch[def.key] && arch[def.key].hips) || null });
+      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null, hips: parseFloat(arch[def.key] && arch[def.key].hips) || null, cycle: arch.cycle, week: def.targetWeek });
     });
   });
   defs.forEach(function(def) {
-    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null });
+    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null, cycle: state.cycle, week: def.targetWeek });
   });
-  content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight }; }), '#e8722c'));
-  content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist }; }), '#3a7ae8'));
-  content.appendChild(buildLineChart('Hips (in)', allPoints.map(function(p) { return { label: p.label, val: p.hips }; }), '#c2427a'));
+  content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight, cycle: p.cycle, week: p.week }; }), '#e8722c'));
+  content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist, cycle: p.cycle, week: p.week }; }), '#3a7ae8'));
+  content.appendChild(buildLineChart('Hips (in)', allPoints.map(function(p) { return { label: p.label, val: p.hips, cycle: p.cycle, week: p.week }; }), '#c2427a'));
   container.appendChild(content);
 }
 
@@ -2665,6 +2768,13 @@ function renderProgressScreen(container) {
   };
   newProgramWrap.appendChild(newProgramBtn);
   content.appendChild(newProgramWrap);
+
+  const graphLabel0 = document.createElement('div');
+  graphLabel0.className = 'section-label';
+  graphLabel0.textContent = 'Graphs';
+  content.appendChild(graphLabel0);
+  renderGraphControls(content);
+
   const stepsEntries = [];
   Object.keys(state.activePlan).forEach(function(dayKey) {
     for (let c = 1; c <= state.cycle; c++) {
@@ -2678,7 +2788,7 @@ function renderProgressScreen(container) {
     stepsEntries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
     const stepPoints = stepsEntries.map(function(e) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
-      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight };
+      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
     });
     content.appendChild(buildLineChart('Daily Steps', stepPoints, '#3a7ae8'));
   }
@@ -2703,7 +2813,7 @@ function renderProgressScreen(container) {
     entries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
     const points = entries.map(function(e) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
-      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight };
+      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
     });
     const chart = buildLineChart('', points, '#e8722c');
     card.innerHTML += chart.innerHTML;
@@ -2882,13 +2992,14 @@ function renderProteinScreen(container) {
   graphLabel.className = 'section-label';
   graphLabel.textContent = 'Protein Trend';
   content.appendChild(graphLabel);
+  renderGraphControls(content);
 
   const allTotals = getAllProteinTotals();
   if (allTotals.length >= 2) {
     allTotals.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
     const points = allTotals.map(function(e) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
-      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.total };
+      return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.total, cycle: e.cycle, week: e.week };
     });
     content.appendChild(buildLineChart('Daily Protein (g)', points, '#e8722c'));
   } else {
