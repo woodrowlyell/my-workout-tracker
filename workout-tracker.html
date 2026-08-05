@@ -177,6 +177,16 @@ function getEffectiveDay(dayKey, cycle, week) {
   return state.activePlan[dayKey];
 }
 
+/* =========================================================
+   PHASE 8: Final Optimization - lightweight cache invalidation.
+   stateVersion increments on every real saveState() call, so
+   expensive lifetime-history computations (achievements) can be
+   cached per-version instead of recomputed on every render that
+   doesn't follow an actual data change. Correctness first: any
+   real write bumps the version and invalidates the cache.
+   ========================================================= */
+let stateVersion = 0;
+
 let state = {
   screen: 'select_goal',
   disclaimerAccepted: false,
@@ -405,7 +415,22 @@ const achievementDefinitions = [
   { id: 'volume_100k', label: '100,000 lbs Lifted', desc: 'Crossed an estimated 100,000 lbs of total volume', check: function(stats) { return stats.lifetimeVolume >= 100000; } }
 ];
 
+let achievementsCache = null;
+let achievementsCacheVersion = -1;
+let achievementsNewlyUnlockedConsumed = true;
+
 function computeAndSyncAchievements() {
+  if (achievementsCache && achievementsCacheVersion === stateVersion) {
+    // Same version as last computed: reuse the stable stats/unlockedIds, but never
+    // replay newlyUnlocked more than once - the popup/celebration must fire exactly
+    // once per real unlock event, not once per render within that event's version.
+    return {
+      unlockedIds: achievementsCache.unlockedIds,
+      stats: achievementsCache.stats,
+      newlyUnlocked: achievementsNewlyUnlockedConsumed ? [] : achievementsCache.newlyUnlocked
+    };
+  }
+
   const stats = {
     lifetimeWorkouts: computeLifetimeCompletedWorkouts(),
     programsCompleted: (state.celebratedCycles || []).length,
@@ -430,7 +455,15 @@ function computeAndSyncAchievements() {
     saveUnlockedAchievements(Object.keys(unlockedSet));
   }
 
-  return { unlockedIds: Object.keys(unlockedSet), newlyUnlocked: newlyUnlocked, stats: stats };
+  const result = { unlockedIds: Object.keys(unlockedSet), newlyUnlocked: newlyUnlocked, stats: stats };
+  achievementsCache = result;
+  achievementsCacheVersion = stateVersion;
+  achievementsNewlyUnlockedConsumed = false;
+  return result;
+}
+
+function markAchievementsNewlyUnlockedConsumed() {
+  achievementsNewlyUnlockedConsumed = true;
 }
 
 function renderAchievementsCard(container) {
@@ -461,6 +494,7 @@ function renderAchievementsCard(container) {
       const def = achievementDefinitions.filter(function(d) { return d.id === id; })[0];
       return def ? def.label : id;
     });
+    markAchievementsNewlyUnlockedConsumed();
     setTimeout(function() { showAchievementUnlockModal(labels); }, 300);
   }
 }
@@ -1430,6 +1464,7 @@ function toast(msg) {
 }
 
 async function saveState() {
+  stateVersion++;
   try {
     localStorage.setItem('workout-state-v3', JSON.stringify(state));
     toast('Saved');
@@ -1781,7 +1816,76 @@ function renderAdminScreen(container) {
 
   renderTipLink(content);
 
+  const fixLabelsLabel = document.createElement('div');
+  fixLabelsLabel.className = 'section-label';
+  fixLabelsLabel.textContent = 'Troubleshooting';
+  content.appendChild(fixLabelsLabel);
+  renderDayLabelFixTool(content);
+
   container.appendChild(content);
+}
+
+/* =========================================================
+   Day label repair tool (manual, opt-in, label-only).
+   Fixes a known display bug where swapping days could leave
+   two days sharing the same label (e.g. two "Sun" entries,
+   missing "Thu") after a day-swap. This ONLY edits
+   state.activePlan[dayKey].label - it never touches
+   exerciseIds, weights, checkpoints, proteinEntries, or
+   weeklyOverrides. Nothing runs automatically; a person must
+   open this and tap Save for anything to change. Safe to ship
+   to everyone since correctly-labeled plans are simply left
+   alone if untouched.
+   ========================================================= */
+function renderDayLabelFixTool(container) {
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Day labels look wrong?</p>' +
+    '<p class="ex-scheme" style="margin-bottom:10px;">If swapping days ever left two days with the same name (e.g. two "Sun" entries) or a missing day, you can manually fix the labels here. This only changes what each day is called \u2014 your logged weights, checkpoints, and history for every day stay exactly as they are.</p>';
+
+  const dayNameMap = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
+  const inputs = {};
+
+  getOrderedDayKeys().forEach(function(dayKey) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px;';
+    const fixedPrefix = document.createElement('span');
+    fixedPrefix.style.cssText = 'font-size:13px;font-weight:700;color:#999;width:34px;flex-shrink:0;';
+    fixedPrefix.textContent = dayNameMap[dayKey];
+    row.appendChild(fixedPrefix);
+
+    const currentLabel = state.activePlan[dayKey].label || '';
+    const currentType = splitDayLabel(currentLabel).typePart || currentLabel;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentType;
+    input.setAttribute('aria-label', dayNameMap[dayKey] + ' workout type label');
+    input.style.cssText = 'flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;';
+    row.appendChild(input);
+    inputs[dayKey] = input;
+
+    wrap.appendChild(row);
+  });
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Save Corrected Labels';
+  saveBtn.style.cssText = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;margin-top:8px;';
+  saveBtn.onclick = function() {
+    if (!confirm('This will update the day names shown in the app. It will NOT change any of your logged weights, checkpoints, or history. Continue?')) return;
+    Object.keys(inputs).forEach(function(dayKey) {
+      const newType = inputs[dayKey].value.trim();
+      if (newType) {
+        state.activePlan[dayKey].label = dayNameMap[dayKey] + ' ' + newType;
+      }
+    });
+    saveState();
+    render();
+    toast('Day labels updated');
+  };
+  wrap.appendChild(saveBtn);
+
+  container.appendChild(wrap);
 }
 
 function acceptDisclaimer() {
@@ -1928,7 +2032,17 @@ function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
   });
   return best;
 }
+let entriesCacheVersion = -1;
+let entriesCacheByExercise = {};
+
 function getAllEntriesForExercise(exId) {
+  if (entriesCacheVersion === stateVersion && entriesCacheByExercise[exId]) {
+    return entriesCacheByExercise[exId];
+  }
+  if (entriesCacheVersion !== stateVersion) {
+    entriesCacheByExercise = {};
+    entriesCacheVersion = stateVersion;
+  }
   const results = [];
   Object.keys(state.activePlan).forEach(function(dayKey) {
     for (let c = 1; c <= state.cycle; c++) {
@@ -1938,6 +2052,7 @@ function getAllEntriesForExercise(exId) {
       }
     }
   });
+  entriesCacheByExercise[exId] = results;
   return results;
 }
 
@@ -3379,6 +3494,21 @@ function renderDailyAdaptBanner(container, dayKey, cutIds) {
 
 function renderExerciseCard(dayKey, exId, exIndex) {
   const ex = exerciseLibrary[exId];
+  if (!ex) {
+    // Defensive guard: an exercise id referenced in a saved plan/override no longer
+    // exists in the current programData.json (e.g. library updated). Render a plain
+    // notice instead of throwing, so one stale id can't break the whole day view.
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = '<p class="ex-scheme" style="color:#999;">An exercise in today\u2019s plan is no longer available. Use Swap to replace it.</p>';
+    const swapBtn = document.createElement('button');
+    swapBtn.className = 'ex-btn';
+    swapBtn.style.cssText = 'background:#eef3fb;border-color:#b9cdf0;color:#1c3a7a;margin-top:8px;';
+    swapBtn.textContent = 'Swap';
+    swapBtn.onclick = function() { openSwapModal(dayKey, exIndex); };
+    card.appendChild(swapBtn);
+    return card;
+  }
   const day = state.activePlan[dayKey];
   const isPriority = day.priorityIds && day.priorityIds.indexOf(exId) !== -1;
   const card = document.createElement('div');
@@ -4003,6 +4133,7 @@ function renderCheckpointsScreen(container) {
     const dateInput = document.createElement('input');
     dateInput.type = 'date';
     dateInput.value = currentDate;
+    dateInput.setAttribute('aria-label', def.title + ' date');
     dateInput.style.cssText = 'flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;';
     dateInput.onchange = function() {
       if (!dateInput.value) return;
