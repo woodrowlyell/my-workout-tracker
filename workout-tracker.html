@@ -2780,7 +2780,9 @@ function buildLineChart(title, points, color, showPB, opts) {
   }
 
   const svgId = chartId + '_svg';
-  wrap.innerHTML += '<svg class="chart" id="' + svgId + '" viewBox="0 0 ' + W + ' ' + H + '">' + trendPath + '<path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>' + dots + labels + '</svg>';
+  const svgWrapper = document.createElement('div');
+  svgWrapper.innerHTML = '<svg class="chart" id="' + svgId + '" viewBox="0 0 ' + W + ' ' + H + '">' + trendPath + '<path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>' + dots + labels + '</svg>';
+  wrap.appendChild(svgWrapper.firstChild);
   const first = valid[0].val, last = valid[valid.length - 1].val;
   const diff = (last - first).toFixed(1);
   const pctChange = first !== 0 ? (((last - first) / Math.abs(first)) * 100).toFixed(1) : null;
