@@ -1620,13 +1620,18 @@ const tutorialSlides = [
   },
   {
     title: 'Your day, laid out',
-    body: 'Each day shows your warm-up, exercises with weight tracking, and a cooldown. Check off each part as you go.',
+    body: 'Each day shows your warm-up, exercises with weight tracking, and a cooldown. Check off each part as you go. Short on time? Use the 15/30/45-minute options at the top of your day to trim accessory work \u2014 your full plan comes back automatically tomorrow.',
     mock: '<div style="padding:16px;"><div class="card"><p class="ex-name">Machine chest press</p><p class="ex-scheme">3 x 10</p><div class="weight-row"><label>This week</label><input type="number" placeholder="0" style="pointer-events:none;" disabled><span class="unit">lbs</span></div></div><div class="check-row" style="padding-top:0;border-top:none;"><input type="checkbox" disabled><label>Completed cardio warm-up</label></div></div>'
   },
   {
     title: 'Swap what does not work',
-    body: 'Tap Swap on any exercise to pick an alternative that trains the same muscle group. You can also swap an entire day with another day if your schedule changes.',
+    body: 'Tap Swap on any exercise to pick an alternative that trains the same muscle group. You can also swap an entire day with another day if your schedule changes. Exercise cards also show smart suggestions \u2014 a weight or rep target based on your history, or a deload suggestion if a lift has stalled for a few weeks.',
     mock: '<div style="padding:16px;"><div class="ex-top"><div><p class="ex-name">Leg press</p><p class="ex-scheme">3 x 12</p></div><div class="ex-actions"><button class="ex-btn" style="pointer-events:none;">Swap</button></div></div><button style="width:100%;padding:10px;background:#eef3fb;border:1px solid #b9cdf0;color:#1c3a7a;border-radius:10px;font-size:13px;font-weight:600;margin-top:14px;" disabled>Swap this day with another day</button></div>'
+  },
+  {
+    title: 'Add your own exercises',
+    body: 'Anything you do beyond your planned workout \u2014 an extra lift, a favorite move, something not in your program \u2014 can be logged with "+ Add Optional Exercise" at the bottom of any day. Create your own exercises too; they get their own graphs, personal records, and history, just like built-in ones.',
+    mock: '<div style="padding:16px;"><button style="width:100%;padding:12px;background:#fff;border:2px dashed #ddd;color:#1c1c1a;border-radius:10px;font-size:14px;font-weight:600;" disabled>+ Add Optional Exercise</button></div>'
   },
   {
     title: 'Track your checkpoints',
@@ -1639,13 +1644,28 @@ const tutorialSlides = [
     mock: '<div style="padding:16px;"><div class="card"><p class="ex-name">Protein today</p><div style="font-size:28px;font-weight:800;margin:6px 0;">92<span style="font-size:14px;color:#999;font-weight:600;"> slash 150g</span></div><div style="background:#f0efe9;border-radius:20px;height:8px;overflow:hidden;"><div style="background:#e8722c;height:100%;width:61%;"></div></div></div></div>'
   },
   {
+    title: 'Graphs that tell a story',
+    body: 'Every chart supports trend lines, tap-a-point for exact values, and an Expand button for a full-screen view with Smart Insights \u2014 your logging streak, biggest jump, and more, computed straight from your own history.',
+    mock: '<div style="padding:16px;"><div class="progress-ex-card"><h4>Bench Press</h4><svg class="chart" viewBox="0 0 320 100" style="pointer-events:none;"><path d="M20,70 L100,50 L180,55 L260,20" fill="none" stroke="#e8722c" stroke-width="2.5"/><circle cx="260" cy="20" r="6" fill="#ffd700" stroke="#a1780a" stroke-width="2"/></svg></div></div>'
+  },
+  {
+    title: 'Your Progress dashboard',
+    body: 'The Progress tab shows your overall program completion, a weekly summary of workouts and volume, and Achievements you unlock as you go \u2014 first workout, streaks, personal records, and volume milestones.',
+    mock: '<div style="padding:16px;"><div class="card"><p class="ex-name" style="margin-bottom:10px;">Program Progress</p><div style="background:#f0efe9;border-radius:20px;height:10px;overflow:hidden;"><div style="background:#e8722c;height:100%;width:62%;"></div></div><div style="font-size:13px;color:#777;margin-top:6px;">62% complete</div></div></div>'
+  },
+  {
+    title: 'Share your progress',
+    body: 'From the Progress tab, tap Share Progress to build a card with exactly the stats you want to show off \u2014 a strength gain, inches lost, a streak. You choose what goes on it before sharing or saving the image.',
+    mock: '<div style="padding:16px;"><div style="background:#1c1c1a;border-radius:12px;padding:20px;text-align:center;"><div style="color:#fff;font-weight:700;font-size:15px;">My Progress</div><div style="color:#e8722c;font-size:11px;font-weight:700;margin-top:12px;">STRENGTH GAINS</div><div style="color:#fff;font-size:13px;margin-top:4px;">Bench Press: 135 \u2192 165 lbs</div></div></div>'
+  },
+  {
     title: 'Your data stays backed up',
-    body: 'The app automatically keeps snapshots of your last few days, and you can download or copy a full backup anytime from the Progress tab.',
+    body: 'The app automatically keeps snapshots of your last few days, and you can download or copy a full backup anytime from the Admin tab \u2014 which also has cycle management, your personal exercise library, and this tutorial.',
     mock: '<div style="padding:16px;"><div class="backup-box"><h4>Back up your data</h4><p>Save a copy of your progress.</p><div class="backup-btn-row"><button class="backup-btn export" disabled>Download Backup</button><button class="backup-btn import" disabled>Copy as Text</button></div></div></div>'
   },
   {
     title: 'You are ready to go',
-    body: 'You can replay this tutorial anytime from the Tutorial tab next to Progress. Good luck, and have fun with it.',
+    body: 'You can replay this tutorial anytime from the Admin tab. Good luck, and have fun with it.',
     mock: ''
   }
 ];
