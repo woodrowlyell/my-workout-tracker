@@ -167,6 +167,11 @@ function weekOverrideKey(cycle, week) {
   return 'c' + cycle + '-w' + week;
 }
 
+function dayOrderIndex(dayKey) {
+  const idx = DAY_ORDER.indexOf(dayKey);
+  return idx === -1 ? 99 : idx;
+}
+
 function getEffectiveDay(dayKey, cycle, week) {
   const c = cycle !== undefined ? cycle : state.viewingCycle;
   const w = week !== undefined ? week : state.week;
@@ -4799,7 +4804,7 @@ function renderProgressScreen(container) {
     }
   });
   if (stepsEntries.length >= 2) {
-    stepsEntries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    stepsEntries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week) || (dayOrderIndex(a.dayKey) - dayOrderIndex(b.dayKey)); });
     const stepPoints = stepsEntries.map(function(e) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
       return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
@@ -4824,7 +4829,7 @@ function renderProgressScreen(container) {
       content.appendChild(card);
       return;
     }
-    entries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    entries.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week) || (dayOrderIndex(a.dayKey) - dayOrderIndex(b.dayKey)); });
     const points = entries.map(function(e) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
       return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
@@ -5027,7 +5032,7 @@ function renderProteinScreen(container) {
 
   const allTotals = getAllProteinTotals();
   if (allTotals.length >= 2) {
-    allTotals.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
+    allTotals.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week) || (dayOrderIndex(a.dayKey) - dayOrderIndex(b.dayKey)); });
     const points = allTotals.map(function(e) {
       const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
       return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.total, cycle: e.cycle, week: e.week };
