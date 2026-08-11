@@ -3953,6 +3953,8 @@ function addOptionalExerciseToToday(exId) {
   render();
   toast('Added \u2014 enter your weight below');
 }
+
+function openOptionalExerciseLogger(exId) {
   const def = getAnyExerciseDef(exId);
   if (!def) return;
   const entries = getOptionalEntriesForExercise(exId);
