@@ -3744,18 +3744,20 @@ function logOptionalExercise(exId, weight) {
   const history = loadOptionalHistory();
   const dateKey = todayStr();
   if (!history[dateKey]) history[dateKey] = [];
-  const existingIdx = history[dateKey].findIndex(function(e) { return e.exId === exId; });
-  const entry = { exId: exId, weight: weight, date: dateKey };
-  if (existingIdx !== -1) history[dateKey][existingIdx] = entry;
-  else history[dateKey].push(entry);
+  // Always add a new entry rather than overwriting - lets someone log the same
+  // exercise more than once in a day (e.g. a second working set at a different
+  // weight). Each entry gets a unique id so it can be removed individually
+  // without affecting other entries for the same exercise/day.
+  const entry = { id: 'opt_' + Date.now() + '_' + Math.floor(Math.random() * 100000), exId: exId, weight: weight, date: dateKey };
+  history[dateKey].push(entry);
   saveOptionalHistory(history);
   markRecentlyUsed(exId);
 }
 
-function removeOptionalExerciseLog(exId, dateKey) {
+function removeOptionalExerciseLogById(entryId, dateKey) {
   const history = loadOptionalHistory();
   if (history[dateKey]) {
-    history[dateKey] = history[dateKey].filter(function(e) { return e.exId !== exId; });
+    history[dateKey] = history[dateKey].filter(function(e) { return e.id !== entryId; });
     if (history[dateKey].length === 0) delete history[dateKey];
     saveOptionalHistory(history);
   }
@@ -3763,7 +3765,19 @@ function removeOptionalExerciseLog(exId, dateKey) {
 
 function getTodaysOptionalEntries() {
   const history = loadOptionalHistory();
-  return history[todayStr()] || [];
+  const todaysList = history[todayStr()] || [];
+  // Backward compatibility: entries logged before per-entry ids existed have no
+  // .id field. Give each a stable, unique fallback id based on its position so
+  // Remove targets exactly one entry instead of matching every id-less entry.
+  let needsSave = false;
+  todaysList.forEach(function(e, i) {
+    if (!e.id) { e.id = 'legacy_' + todayStr() + '_' + i; needsSave = true; }
+  });
+  if (needsSave) {
+    history[todayStr()] = todaysList;
+    saveOptionalHistory(history);
+  }
+  return todaysList;
 }
 
 function openCreateExerciseModal(onCreated) {
@@ -3870,7 +3884,7 @@ function openOptionalExerciseSelector() {
   createNewBtn.onclick = function() {
     document.body.removeChild(overlay);
     openCreateExerciseModal(function(newId) {
-      openOptionalExerciseLogger(newId);
+      addOptionalExerciseToToday(newId);
     });
   };
   sheet.appendChild(createNewBtn);
@@ -3903,10 +3917,14 @@ function openOptionalExerciseSelector() {
       row.appendChild(nameEl);
       const selectBtn = document.createElement('button');
       selectBtn.className = 'swap-btn permanent';
-      selectBtn.textContent = 'Select';
+      const alreadyAdded = isExerciseAlreadyLoggedToday(exId);
+      selectBtn.textContent = alreadyAdded ? 'Already Added' : 'Select';
+      selectBtn.disabled = alreadyAdded;
+      if (alreadyAdded) { selectBtn.style.cssText = 'background:#e6e4dc;color:#999;'; }
       selectBtn.onclick = function() {
+        if (alreadyAdded) return;
         document.body.removeChild(overlay);
-        openOptionalExerciseLogger(exId);
+        addOptionalExerciseToToday(exId);
       };
       row.appendChild(selectBtn);
       listWrap.appendChild(row);
@@ -3927,7 +3945,14 @@ function openOptionalExerciseSelector() {
   document.body.appendChild(overlay);
 }
 
-function openOptionalExerciseLogger(exId) {
+function addOptionalExerciseToToday(exId) {
+  if (isExerciseAlreadyLoggedToday(exId)) { render(); return; }
+  const entries = getOptionalEntriesForExercise(exId);
+  const startingWeight = entries.length > 0 ? entries[entries.length - 1].weight : 0;
+  logOptionalExercise(exId, startingWeight);
+  render();
+  toast('Added \u2014 enter your weight below');
+}
   const def = getAnyExerciseDef(exId);
   if (!def) return;
   const entries = getOptionalEntriesForExercise(exId);
@@ -4019,21 +4044,49 @@ function renderOptionalExercisesSection(container) {
   todaysEntries.forEach(function(entry) {
     const def = getAnyExerciseDef(entry.exId);
     if (!def) return;
+
     const card = document.createElement('div');
     card.className = 'card ex-complete';
+
     const top = document.createElement('div');
     top.className = 'ex-top';
-    top.innerHTML = '<div><p class="ex-name">' + def.name + '</p><p class="ex-scheme">Logged: ' + entry.weight + ' lbs today</p></div>';
+    const left = document.createElement('div');
+    left.innerHTML = '<p class="ex-name">' + def.name + ' <span style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;">Added</span></p><p class="ex-scheme">' + (def.scheme || '3 x 10') + '</p>';
+    top.appendChild(left);
+    const actions = document.createElement('div');
+    actions.className = 'ex-actions';
+    if (def.link) {
+      const a = document.createElement('a');
+      a.className = 'ex-btn';
+      a.href = def.link;
+      a.target = '_blank';
+      a.textContent = 'How-to';
+      actions.appendChild(a);
+    }
     const removeBtn = document.createElement('button');
     removeBtn.className = 'ex-btn';
     removeBtn.style.cssText = 'background:#fdf0e6;border-color:#f0cba4;color:#a11c56;';
     removeBtn.textContent = 'Remove';
-    removeBtn.onclick = function() { removeOptionalExerciseLog(entry.exId, todayStr()); render(); toast('Removed'); };
-    const actions = document.createElement('div');
-    actions.className = 'ex-actions';
+    removeBtn.onclick = function() { removeOptionalExerciseLogById(entry.id, todayStr()); render(); toast('Removed'); };
     actions.appendChild(removeBtn);
     top.appendChild(actions);
     card.appendChild(top);
+
+    const row = document.createElement('div');
+    row.className = 'weight-row';
+    row.innerHTML = '<label>This week</label><input type="number" inputmode="decimal" placeholder="0" value="' + entry.weight + '" /><span class="unit">lbs</span>';
+    const input = row.querySelector('input');
+    input.addEventListener('change', function() {
+      const val = parseFloat(input.value);
+      if (val && val > 0) { updateOptionalExerciseWeight(entry.id, todayStr(), val); render(); }
+    });
+    card.appendChild(row);
+
+    const sugRow = document.createElement('div');
+    sugRow.style.cssText = 'font-size:12px;color:#1c3a7a;background:#eef3fb;border-radius:6px;padding:6px 8px;margin-top:8px;';
+    sugRow.textContent = 'Suggested: ' + getOptionalSuggestion(entry.exId);
+    card.appendChild(sugRow);
+
     container.appendChild(card);
   });
 
@@ -4285,6 +4338,7 @@ function renderDayContent(container) {
     swapDayBtnRest.style.cssText = 'width:100%;padding:10px;background:#eef3fb;border:1px solid #b9cdf0;color:#1c3a7a;border-radius:10px;font-size:13px;font-weight:600;margin-top:10px;';
     swapDayBtnRest.onclick = function() { openDaySwapModal(state.day); };
     content.appendChild(swapDayBtnRest);
+    renderOptionalExercisesSection(content);
     container.appendChild(content);
     return;
   }
