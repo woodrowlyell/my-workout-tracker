@@ -433,9 +433,6 @@ let achievementsNewlyUnlockedConsumed = true;
 
 function computeAndSyncAchievements() {
   if (achievementsCache && achievementsCacheVersion === stateVersion) {
-    // Same version as last computed: reuse the stable stats/unlockedIds, but never
-    // replay newlyUnlocked more than once - the popup/celebration must fire exactly
-    // once per real unlock event, not once per render within that event's version.
     return {
       unlockedIds: achievementsCache.unlockedIds,
       stats: achievementsCache.stats,
@@ -1635,7 +1632,7 @@ const tutorialSlides = [
   },
   {
     title: 'Add your own exercises',
-    body: 'Anything you do beyond your planned workout \u2014 an extra lift, a favorite move, something not in your program \u2014 can be logged with "+ Add Optional Exercise" at the bottom of any day. Create your own exercises too; they get their own graphs, personal records, and history, just like built-in ones.',
+    body: 'Anything you do beyond your planned workout \u2014 an extra lift, a favorite move, something not in your program \u2014 can be logged with "+ Add Optional Exercise" at the bottom of any day. Create your own exercises too; they get their own graphs, personal records, and history, just like built-in ones. Each day keeps its own optional exercises \u2014 they never carry over to a different day or week.',
     mock: '<div style="padding:16px;"><button style="width:100%;padding:12px;background:#fff;border:2px dashed #ddd;color:#1c1c1a;border-radius:10px;font-size:14px;font-weight:600;" disabled>+ Add Optional Exercise</button></div>'
   },
   {
@@ -3551,14 +3548,22 @@ function getAdaptedDay(dayKey) {
    Three fully isolated storage keys, none of which ever touch
    workout-state-v3:
      - workout-custom-exercises-v1: user-created exercise definitions
-     - workout-optional-history-v1: logged optional-exercise sessions,
-       keyed by real calendar date (not cycle/week, since these can
-       happen any day, independent of the prescribed schedule)
+     - workout-optional-history-v1: logged optional-exercise sessions
      - workout-optional-prefs-v1: favorites + recently-used list
    Optional exercises NEVER modify state.activePlan, isDayComplete,
-   progression, or any prescribed-workout logic. They are purely
-   additive logging that happens to reuse the existing chart/
-   achievement infrastructure via computed views over their own data.
+   progression, or any prescribed-workout logic.
+
+   IMPORTANT: optional-history entries are keyed by the specific
+   program day+week+cycle instance (dayKey::cCYCLE::wWEEK), the same
+   convention used for regular exercise weights - NOT by real calendar
+   date. This means:
+     - An optional exercise stays attached to the exact day's card,
+       every time that day/week/cycle is viewed again.
+     - It never "carries forward" to a different week or a different
+       day that happens to train the same muscle group - a new
+       week/day instance always starts empty.
+     - Switching weeks/cycles shows exactly what was logged for that
+       occurrence, same as every other tracked field in this app.
    ========================================================= */
 const CUSTOM_EXERCISES_KEY = 'workout-custom-exercises-v1';
 const OPTIONAL_HISTORY_KEY = 'workout-optional-history-v1';
@@ -3586,6 +3591,10 @@ function loadOptionalHistory() {
 }
 function saveOptionalHistory(obj) {
   try { localStorage.setItem(OPTIONAL_HISTORY_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+
+function optionalDayKey(dayKey, cycle, week) {
+  return dayKey + '::c' + cycle + '::w' + week;
 }
 
 function loadOptionalPrefs() {
@@ -3731,53 +3740,88 @@ function buildSortedExerciseList(searchQuery, todaysExerciseIds) {
 function getOptionalEntriesForExercise(exId) {
   const history = loadOptionalHistory();
   const results = [];
-  Object.keys(history).forEach(function(dateKey) {
-    (history[dateKey] || []).forEach(function(entry) {
-      if (entry.exId === exId) results.push({ date: dateKey, weight: parseFloat(entry.weight) });
+  Object.keys(history).forEach(function(dayKeyCombo) {
+    const parts = dayKeyCombo.split('::');
+    const dayKey = parts[0];
+    const cycle = parts[1] ? parseInt(parts[1].replace('c', ''), 10) : 1;
+    const week = parts[2] ? parseInt(parts[2].replace('w', ''), 10) : 1;
+    (history[dayKeyCombo] || []).forEach(function(entry) {
+      if (entry.exId === exId) results.push({ dayKey: dayKey, cycle: cycle, week: week, weight: parseFloat(entry.weight), date: entry.date });
     });
   });
-  results.sort(function(a, b) { return a.date.localeCompare(b.date); });
+  results.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week) || (dayOrderIndex(a.dayKey) - dayOrderIndex(b.dayKey)); });
   return results;
 }
 
-function logOptionalExercise(exId, weight) {
+function logOptionalExercise(dayKey, exId, weight) {
   const history = loadOptionalHistory();
-  const dateKey = todayStr();
-  if (!history[dateKey]) history[dateKey] = [];
-  // Always add a new entry rather than overwriting - lets someone log the same
-  // exercise more than once in a day (e.g. a second working set at a different
-  // weight). Each entry gets a unique id so it can be removed individually
-  // without affecting other entries for the same exercise/day.
-  const entry = { id: 'opt_' + Date.now() + '_' + Math.floor(Math.random() * 100000), exId: exId, weight: weight, date: dateKey };
-  history[dateKey].push(entry);
+  const key = optionalDayKey(dayKey, state.viewingCycle, state.week);
+  if (!history[key]) history[key] = [];
+  const existing = history[key].filter(function(e) { return e.exId === exId; });
+  if (existing.length > 0) {
+    existing[0].weight = weight;
+    existing[0].date = todayStr();
+  } else {
+    const entry = { id: 'opt_' + Date.now() + '_' + Math.floor(Math.random() * 100000), exId: exId, weight: weight, date: todayStr() };
+    history[key].push(entry);
+  }
   saveOptionalHistory(history);
   markRecentlyUsed(exId);
 }
 
-function removeOptionalExerciseLogById(entryId, dateKey) {
+function updateOptionalExerciseWeight(entryId, dayKey, weight) {
   const history = loadOptionalHistory();
-  if (history[dateKey]) {
-    history[dateKey] = history[dateKey].filter(function(e) { return e.id !== entryId; });
-    if (history[dateKey].length === 0) delete history[dateKey];
+  const key = optionalDayKey(dayKey, state.viewingCycle, state.week);
+  if (history[key]) {
+    const entry = history[key].filter(function(e) { return e.id === entryId; })[0];
+    if (entry) { entry.weight = weight; entry.date = todayStr(); saveOptionalHistory(history); }
+  }
+}
+
+function removeOptionalExerciseLogById(entryId, dayKey) {
+  const key = optionalDayKey(dayKey, state.viewingCycle, state.week);
+  const history = loadOptionalHistory();
+  if (history[key]) {
+    history[key] = history[key].filter(function(e) { return e.id !== entryId; });
+    if (history[key].length === 0) delete history[key];
     saveOptionalHistory(history);
   }
 }
 
-function getTodaysOptionalEntries() {
+function getTodaysOptionalEntries(dayKey) {
   const history = loadOptionalHistory();
-  const todaysList = history[todayStr()] || [];
-  // Backward compatibility: entries logged before per-entry ids existed have no
-  // .id field. Give each a stable, unique fallback id based on its position so
-  // Remove targets exactly one entry instead of matching every id-less entry.
+  const key = optionalDayKey(dayKey, state.viewingCycle, state.week);
+  const list = history[key] || [];
   let needsSave = false;
-  todaysList.forEach(function(e, i) {
-    if (!e.id) { e.id = 'legacy_' + todayStr() + '_' + i; needsSave = true; }
+  list.forEach(function(e, i) {
+    if (!e.id) { e.id = 'legacy_' + key + '_' + i; needsSave = true; }
   });
-  if (needsSave) {
-    history[todayStr()] = todaysList;
-    saveOptionalHistory(history);
-  }
-  return todaysList;
+  if (needsSave) { history[key] = list; saveOptionalHistory(history); }
+  return list;
+}
+
+/**
+ * Returns true if this exercise is already logged for the given day's
+ * current week/cycle instance. Used to prevent duplicate entries and to
+ * disable the option in the selector.
+ */
+function isExerciseAlreadyLoggedToday(dayKey, exId) {
+  const entries = getTodaysOptionalEntries(dayKey);
+  return entries.some(function(e) { return e.exId === exId; });
+}
+
+/**
+ * Suggested weight for an optional exercise: based purely on that
+ * exercise's own optional-history (its own logged weights over time),
+ * since it has no scheme/program context. Suggests 5 lbs above the most
+ * recent logged weight for this exact exercise, regardless of which day
+ * it was logged on.
+ */
+function getOptionalSuggestion(exId) {
+  const entries = getOptionalEntriesForExercise(exId);
+  if (entries.length === 0) return 'Log a weight to get a suggestion next time';
+  const last = entries[entries.length - 1];
+  return 'Try ' + (last.weight + 5) + ' lbs (up from your last logged ' + last.weight + ' lbs)';
 }
 
 function openCreateExerciseModal(onCreated) {
@@ -3863,14 +3907,14 @@ function openCreateExerciseModal(onCreated) {
   nameField.input.focus();
 }
 
-function openOptionalExerciseSelector() {
+function openOptionalExerciseSelector(dayKey) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.style.alignItems = 'center';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
   sheet.style.cssText = 'border-radius:20px;max-width:440px;margin:0 auto;max-height:80vh;';
-  sheet.innerHTML = '<h3>Add Optional Exercise</h3><div class="modal-sub">Search every exercise in the app, or create your own.</div>';
+  sheet.innerHTML = '<h3>Add Optional Exercise</h3><div class="modal-sub">Search every exercise in the app, or create your own. Already-added exercises for this day are marked.</div>';
 
   const searchInput = document.createElement('input');
   searchInput.type = 'text';
@@ -3884,7 +3928,7 @@ function openOptionalExerciseSelector() {
   createNewBtn.onclick = function() {
     document.body.removeChild(overlay);
     openCreateExerciseModal(function(newId) {
-      addOptionalExerciseToToday(newId);
+      addOptionalExerciseToToday(dayKey, newId);
     });
   };
   sheet.appendChild(createNewBtn);
@@ -3895,7 +3939,7 @@ function openOptionalExerciseSelector() {
 
   function renderList() {
     listWrap.innerHTML = '';
-    const todaysDay = getAdaptedDay(state.day).day;
+    const todaysDay = getAdaptedDay(dayKey).day;
     const todaysIds = (todaysDay && !todaysDay.rest) ? (todaysDay.exerciseIds || []) : [];
     const ids = buildSortedExerciseList(searchInput.value, todaysIds).slice(0, 40);
     if (ids.length === 0) {
@@ -3917,14 +3961,14 @@ function openOptionalExerciseSelector() {
       row.appendChild(nameEl);
       const selectBtn = document.createElement('button');
       selectBtn.className = 'swap-btn permanent';
-      const alreadyAdded = isExerciseAlreadyLoggedToday(exId);
+      const alreadyAdded = isExerciseAlreadyLoggedToday(dayKey, exId);
       selectBtn.textContent = alreadyAdded ? 'Already Added' : 'Select';
       selectBtn.disabled = alreadyAdded;
       if (alreadyAdded) { selectBtn.style.cssText = 'background:#e6e4dc;color:#999;'; }
       selectBtn.onclick = function() {
         if (alreadyAdded) return;
         document.body.removeChild(overlay);
-        addOptionalExerciseToToday(exId);
+        addOptionalExerciseToToday(dayKey, exId);
       };
       row.appendChild(selectBtn);
       listWrap.appendChild(row);
@@ -3945,104 +3989,22 @@ function openOptionalExerciseSelector() {
   document.body.appendChild(overlay);
 }
 
-function addOptionalExerciseToToday(exId) {
-  if (isExerciseAlreadyLoggedToday(exId)) { render(); return; }
+function addOptionalExerciseToToday(dayKey, exId) {
+  if (isExerciseAlreadyLoggedToday(dayKey, exId)) { render(); return; }
   const entries = getOptionalEntriesForExercise(exId);
   const startingWeight = entries.length > 0 ? entries[entries.length - 1].weight : 0;
-  logOptionalExercise(exId, startingWeight);
+  logOptionalExercise(dayKey, exId, startingWeight);
   render();
   toast('Added \u2014 enter your weight below');
 }
 
-function openOptionalExerciseLogger(exId) {
-  const def = getAnyExerciseDef(exId);
-  if (!def) return;
-  const entries = getOptionalEntriesForExercise(exId);
-  const last = entries.length > 0 ? entries[entries.length - 1] : null;
-  const best = entries.length > 0 ? entries.reduce(function(m, e) { return e.weight > m.weight ? e : m; }, entries[0]) : null;
-  const prefs = loadOptionalPrefs();
-  const isFav = prefs.favorites.indexOf(exId) !== -1;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.style.alignItems = 'center';
-  const sheet = document.createElement('div');
-  sheet.className = 'modal-sheet';
-  sheet.style.cssText = 'border-radius:20px;max-width:420px;margin:0 auto;';
-
-  const topRow = document.createElement('div');
-  topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;';
-  const h = document.createElement('h3');
-  h.style.margin = '0';
-  h.textContent = def.name;
-  topRow.appendChild(h);
-  const favBtn = document.createElement('button');
-  favBtn.textContent = isFav ? '\u2b50' : '\u2606';
-  favBtn.style.cssText = 'background:none;border:none;font-size:22px;cursor:pointer;';
-  favBtn.onclick = function() { toggleFavorite(exId); document.body.removeChild(overlay); openOptionalExerciseLogger(exId); };
-  topRow.appendChild(favBtn);
-  sheet.appendChild(topRow);
-
-  sheet.innerHTML += '<div class="modal-sub">Suggested: 3 x 10 (optional exercise \u2014 not part of your prescribed program)</div>';
-
-  const howToLink = document.createElement('a');
-  howToLink.href = def.link;
-  howToLink.target = '_blank';
-  howToLink.className = 'ex-btn';
-  howToLink.style.cssText = 'display:inline-block;margin-bottom:12px;';
-  howToLink.textContent = 'How-to';
-  sheet.appendChild(howToLink);
-
-  if (last || best) {
-    const historyBox = document.createElement('div');
-    historyBox.style.cssText = 'font-size:12px;color:#888;background:#f7f6f2;border-radius:8px;padding:8px 10px;margin-bottom:12px;';
-    let historyText = '';
-    if (last) historyText += 'Last: ' + last.weight + ' lbs (' + last.date + ')';
-    if (best) historyText += (historyText ? ' \u00b7 ' : '') + 'Best: ' + best.weight + ' lbs';
-    historyBox.textContent = historyText;
-    sheet.appendChild(historyBox);
-  }
-
-  const row = document.createElement('div');
-  row.className = 'weight-row';
-  row.style.cssText = 'margin-top:0;padding-top:0;border-top:none;';
-  row.innerHTML = '<label>Weight</label><input type="number" inputmode="decimal" placeholder="0" value="' + (last ? last.weight : '') + '" /><span class="unit">lbs</span>';
-  sheet.appendChild(row);
-  const weightInput = row.querySelector('input');
-
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'goal-btn';
-  saveBtn.style.cssText = 'text-align:center;background:#1c1c1a;color:#fff;border-color:#1c1c1a;margin-top:14px;';
-  saveBtn.textContent = 'Log Exercise';
-  saveBtn.onclick = function() {
-    const val = parseFloat(weightInput.value);
-    if (!val || val <= 0) { toast('Enter a weight first'); return; }
-    logOptionalExercise(exId, val);
-    document.body.removeChild(overlay);
-    render();
-    toast('Optional exercise logged');
-  };
-  sheet.appendChild(saveBtn);
-
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'modal-close';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = function() { document.body.removeChild(overlay); };
-  sheet.appendChild(cancelBtn);
-
-  overlay.appendChild(sheet);
-  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
-  document.body.appendChild(overlay);
-  weightInput.focus();
-}
-
-function renderOptionalExercisesSection(container) {
+function renderOptionalExercisesSection(container, dayKey) {
   const label = document.createElement('div');
   label.className = 'section-label';
   label.textContent = 'Optional Extra Exercises';
   container.appendChild(label);
 
-  const todaysEntries = getTodaysOptionalEntries();
+  const todaysEntries = getTodaysOptionalEntries(dayKey);
   todaysEntries.forEach(function(entry) {
     const def = getAnyExerciseDef(entry.exId);
     if (!def) return;
@@ -4069,7 +4031,7 @@ function renderOptionalExercisesSection(container) {
     removeBtn.className = 'ex-btn';
     removeBtn.style.cssText = 'background:#fdf0e6;border-color:#f0cba4;color:#a11c56;';
     removeBtn.textContent = 'Remove';
-    removeBtn.onclick = function() { removeOptionalExerciseLogById(entry.id, todayStr()); render(); toast('Removed'); };
+    removeBtn.onclick = function() { removeOptionalExerciseLogById(entry.id, dayKey); render(); toast('Removed'); };
     actions.appendChild(removeBtn);
     top.appendChild(actions);
     card.appendChild(top);
@@ -4080,7 +4042,7 @@ function renderOptionalExercisesSection(container) {
     const input = row.querySelector('input');
     input.addEventListener('change', function() {
       const val = parseFloat(input.value);
-      if (val && val > 0) { updateOptionalExerciseWeight(entry.id, todayStr(), val); render(); }
+      if (val && val > 0) { updateOptionalExerciseWeight(entry.id, dayKey, val); render(); }
     });
     card.appendChild(row);
 
@@ -4095,7 +4057,7 @@ function renderOptionalExercisesSection(container) {
   const addBtn = document.createElement('button');
   addBtn.textContent = '+ Add Optional Exercise';
   addBtn.style.cssText = 'width:100%;padding:12px;background:#fff;border:2px dashed #ddd;color:#1c1c1a;border-radius:10px;font-size:14px;font-weight:600;margin-top:6px;';
-  addBtn.onclick = openOptionalExerciseSelector;
+  addBtn.onclick = function() { openOptionalExerciseSelector(dayKey); };
   container.appendChild(addBtn);
 }
 
@@ -4223,9 +4185,14 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     render();
   });
   card.appendChild(row);
-  if (state.programRecoveryPref) {
+  // Suggestions require a recovery preference to pick a progression style. Older
+  // programs created before onboarding existed (or before this field was added)
+  // may have this as null - default to 'standard' rather than silently hiding
+  // suggestions forever for those programs.
+  const effectiveRecoveryPref = state.programRecoveryPref || 'standard';
+  {
     const prevForSuggestion = getPrevEntry(dayKey, exId, state.week);
-    const baseSuggestion = getProgressionSuggestion(ex.scheme, state.week, state.programRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
+    const baseSuggestion = getProgressionSuggestion(ex.scheme, state.week, effectiveRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
     const suggestion = getIntelligentSuggestion(dayKey, exId, state.week, baseSuggestion);
     if (suggestion) {
       const sugRow = document.createElement('div');
@@ -4340,7 +4307,7 @@ function renderDayContent(container) {
     swapDayBtnRest.style.cssText = 'width:100%;padding:10px;background:#eef3fb;border:1px solid #b9cdf0;color:#1c3a7a;border-radius:10px;font-size:13px;font-weight:600;margin-top:10px;';
     swapDayBtnRest.onclick = function() { openDaySwapModal(state.day); };
     content.appendChild(swapDayBtnRest);
-    renderOptionalExercisesSection(content);
+    renderOptionalExercisesSection(content, state.day);
     container.appendChild(content);
     return;
   }
@@ -4400,7 +4367,7 @@ function renderDayContent(container) {
   stepsLabel.textContent = 'Steps (optional)';
   content.appendChild(stepsLabel);
   content.appendChild(renderStepsBlock(state.day, null));
-  renderOptionalExercisesSection(content);
+  renderOptionalExercisesSection(content, state.day);
   container.appendChild(content);
 }
 
