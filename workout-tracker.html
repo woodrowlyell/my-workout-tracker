@@ -1238,7 +1238,50 @@ const muscleToPplCategory = {
   legs_posterior: 'legs', legs_general: 'legs', legs_quad: 'legs', calves: 'legs'
 };
 
-function filterPoolForDayType(musclePool, dayLabelType, effectiveSplit) {
+/**
+ * Maps onboarding secondaryFocus values to real exerciseLibrary muscle group keys.
+ * Not every focus option has an honest mapping - grip_strength, mobility, and
+ * cardio_endurance don't correspond to a distinct muscle-group bucket in the
+ * exercise pool, so they're intentionally left unmapped rather than faked.
+ * Those three still show correctly on the summary screen as chosen goals, but
+ * do not bias exercise selection, since there is nothing truthful to bias toward.
+ */
+const secondaryFocusToMuscleGroups = {
+  bigger_arms: ['biceps', 'triceps'],
+  bigger_chest: ['chest'],
+  bigger_shoulders: ['shoulders'],
+  stronger_legs: ['legs_quad', 'legs_posterior', 'legs_general'],
+  stronger_core: ['core'],
+  better_posture: ['back'],
+  shoulder_health: ['shoulders']
+};
+
+function getFocusMuscleGroups(secondaryFocusList) {
+  const muscles = {};
+  (secondaryFocusList || []).forEach(function(focusKey) {
+    (secondaryFocusToMuscleGroups[focusKey] || []).forEach(function(m) { muscles[m] = true; });
+  });
+  return Object.keys(muscles);
+}
+
+/**
+ * Reorders a flat, deduped exercise-id list so that exercises belonging to the
+ * chosen focus muscle groups come first, before the normal rotation is applied.
+ * Relative order within each group (focus vs. non-focus) is preserved, so this
+ * only shifts priority - it never removes anything from consideration.
+ */
+function prioritizeByFocusMuscles(uniqueList, focusMuscles) {
+  if (!focusMuscles || focusMuscles.length === 0) return uniqueList;
+  const focusSet = {};
+  focusMuscles.forEach(function(m) { focusSet[m] = true; });
+  const focus = [];
+  const rest = [];
+  uniqueList.forEach(function(exId) {
+    const ex = exerciseLibrary[exId];
+    if (ex && focusSet[ex.muscle]) focus.push(exId); else rest.push(exId);
+  });
+  return focus.concat(rest);
+}
   if (effectiveSplit === 'full_body') return musclePool;
   const categoryMap = effectiveSplit === 'ppl' ? muscleToPplCategory : muscleToUpperLowerCategory;
   const dayTypeLower = dayLabelType.toLowerCase();
@@ -1251,15 +1294,27 @@ function filterPoolForDayType(musclePool, dayLabelType, effectiveSplit) {
   return filtered;
 }
 
-function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset, effectiveSplit) {
+function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset, effectiveSplit, focusMuscles) {
   const filteredPool = filterPoolForDayType(musclePool, dayLabelType, effectiveSplit);
   const muscleKeys = Object.keys(filteredPool);
   const flatList = [];
   muscleKeys.forEach(function(m) { filteredPool[m].forEach(function(exId) { flatList.push(exId); }); });
   const uniqueList = flatList.filter(function(v, i) { return flatList.indexOf(v) === i; });
-  const rotated = uniqueList.slice(rotationOffset).concat(uniqueList.slice(0, rotationOffset));
+  const prioritized = prioritizeByFocusMuscles(uniqueList, focusMuscles);
+  const rotated = prioritized.slice(rotationOffset).concat(prioritized.slice(0, rotationOffset));
+
+  // If this day's filtered pool actually contains one or more of the chosen focus
+  // muscle groups, add one extra exercise slot per distinct focus muscle present
+  // here (capped at +2 per day), so focus areas get real additional volume, not
+  // just earlier placement within the same exercise count.
+  let effectiveExCount = exCount;
+  if (focusMuscles && focusMuscles.length > 0) {
+    const presentFocusMuscles = focusMuscles.filter(function(m) { return filteredPool[m] && filteredPool[m].length > 0; });
+    effectiveExCount = exCount + Math.min(presentFocusMuscles.length, 2);
+  }
+
   const chosen = [];
-  for (let i = 0; i < rotated.length && chosen.length < exCount; i++) {
+  for (let i = 0; i < rotated.length && chosen.length < effectiveExCount; i++) {
     const substituted = substituteIfAvoided(rotated[i], avoidList, equipment);
     if (chosen.indexOf(substituted) === -1) chosen.push(substituted);
   }
@@ -1309,6 +1364,7 @@ function generatePersonalizedProgram() {
   const dayTypeLabels = dayTypeLabelsForSplit(effective.split, answers.frequency);
   const musclePool = getMusclePoolForTemplate(goalKey, subgoalKey);
   const exCount = exercisesPerDayForDuration(answers.duration);
+  const focusMuscles = getFocusMuscleGroups(answers.secondaryFocus);
 
   const newActivePlan = {};
   DAY_ORDER.forEach(function(dk) {
@@ -1322,7 +1378,7 @@ function generatePersonalizedProgram() {
         stepsGoal: '8,000+'
       };
     } else {
-      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout, effective.split);
+      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout, effective.split, focusMuscles);
     }
   });
 
@@ -1357,8 +1413,16 @@ function buildProgramHighlights(answers) {
   const goalLabel = goalTemplates[state.onboarding.goalKey] ? goalTemplates[state.onboarding.goalKey].label : '';
   highlights.push('Built around ' + goalLabel);
   if (answers.secondaryFocus && answers.secondaryFocus.length > 0) {
-    const foci = answers.secondaryFocus.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
-    highlights.push('Extra attention on ' + foci);
+    const biasedFoci = answers.secondaryFocus.filter(function(v) { return secondaryFocusToMuscleGroups[v]; });
+    const infoOnlyFoci = answers.secondaryFocus.filter(function(v) { return !secondaryFocusToMuscleGroups[v]; });
+    if (biasedFoci.length > 0) {
+      const fociLabels = biasedFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
+      highlights.push('Extra exercises prioritized for ' + fociLabels);
+    }
+    if (infoOnlyFoci.length > 0) {
+      const infoLabels = infoOnlyFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
+      highlights.push(infoLabels + ' noted as a goal, though exercise selection isn\u2019t adjusted for it specifically');
+    }
   }
   const effective = resolveEffectiveSplit(answers.frequency, answers.split);
   const splitLabels = { full_body: 'Full Body', upper_lower: 'Upper/Lower', ppl: 'Push/Pull/Legs' };
