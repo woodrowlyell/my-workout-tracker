@@ -1282,6 +1282,8 @@ function prioritizeByFocusMuscles(uniqueList, focusMuscles) {
   });
   return focus.concat(rest);
 }
+
+function filterPoolForDayType(musclePool, dayLabelType, effectiveSplit) {
   if (effectiveSplit === 'full_body') return musclePool;
   const categoryMap = effectiveSplit === 'ppl' ? muscleToPplCategory : muscleToUpperLowerCategory;
   const dayTypeLower = dayLabelType.toLowerCase();
