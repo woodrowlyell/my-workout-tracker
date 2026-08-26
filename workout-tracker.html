@@ -141,6 +141,30 @@ const goalTemplates = {
     desc: 'Well-rounded, sustainable training',
     subgoals: ['well_rounded', 'moderate_volume', 'sustain'],
     subgoalLabels: { well_rounded: 'Well-Rounded Full Body', moderate_volume: 'Moderate Volume', sustain: 'Sustain What You Have' }
+  },
+  lose_fat: {
+    label: 'Lose Fat & Get Leaner',
+    desc: 'Strength and conditioning combined to support fat loss, built around your chosen areas of focus',
+    subgoals: null,
+    usesFocusLibrary: true
+  },
+  build_muscle: {
+    label: 'Build Muscle',
+    desc: 'Higher-volume training built around the muscle groups you want to prioritize',
+    subgoals: null,
+    usesFocusLibrary: true
+  },
+  improve_fitness: {
+    label: 'Improve Fitness & Endurance',
+    desc: 'Cardio and work-capacity focused training, built around your chosen areas of focus',
+    subgoals: null,
+    usesFocusLibrary: true
+  },
+  improve_mobility: {
+    label: 'Improve Mobility & Flexibility',
+    desc: 'Mobility and flexibility focused sessions, built around your chosen areas of focus',
+    subgoals: null,
+    usesFocusLibrary: true
   }
 };
 
@@ -154,6 +178,72 @@ function isProgramAvailable(length, goal, subgoal) {
 }
 function getProgram(length, goal, subgoal) {
   return programLibrary[buildPlanKey(length, goal, subgoal)];
+}
+
+/* =========================================================
+   VERSION 1.1: Reusable Focus Library
+   Goal-specific "Areas of Focus" options. Each focus maps to one or more
+   real exerciseLibrary muscle keys, used to bias exercise selection via
+   the existing prioritizeByFocusMuscles / effectiveExCount mechanism
+   (originally built for Get Stronger's secondary focus step, now reused
+   here rather than duplicated). Focuses with cardioBias or mobilityBias
+   don't map to a specific muscle group - they're honored by nudging the
+   day-count/duration logic toward cardio/mobility exercises instead of
+   claiming a muscle-group bias that doesn't exist in the data.
+   This is purely additive: existing goals (get_stronger, general_fitness,
+   glute_and_strength, strengthen_core, yoga) are completely unaffected -
+   they keep their existing single-select subgoal system untouched.
+   ========================================================= */
+const focusLibrary = {
+  lose_fat: [
+    { value: 'full_body_fatloss', label: 'Full Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs_quad', 'legs_posterior', 'legs_general', 'core'] },
+    { value: 'strength_conditioning', label: 'Strength + Conditioning', muscles: ['chest', 'back', 'shoulders', 'legs_quad', 'legs_posterior', 'core'], cardioBias: true },
+    { value: 'conditioning_fatloss', label: 'Conditioning', muscles: [], cardioBias: true },
+    { value: 'cardio_fatloss', label: 'Cardio', muscles: [], cardioBias: true },
+    { value: 'core_fatloss', label: 'Core', muscles: ['core'] },
+    { value: 'upper_body_fatloss', label: 'Upper Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] },
+    { value: 'lower_body_fatloss', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general', 'calves'] }
+  ],
+  build_muscle: [
+    { value: 'full_body_muscle', label: 'Full Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs_quad', 'legs_posterior', 'legs_general', 'core'] },
+    { value: 'upper_body_muscle', label: 'Upper Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] },
+    { value: 'lower_body_muscle', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general', 'calves'] },
+    { value: 'chest_muscle', label: 'Chest', muscles: ['chest'] },
+    { value: 'back_muscle', label: 'Back', muscles: ['back'] },
+    { value: 'shoulders_muscle', label: 'Shoulders', muscles: ['shoulders'] },
+    { value: 'arms_muscle', label: 'Arms', muscles: ['biceps', 'triceps'] },
+    { value: 'legs_muscle', label: 'Legs', muscles: ['legs_quad', 'legs_posterior', 'legs_general'] },
+    { value: 'glutes_muscle', label: 'Glutes', muscles: ['legs_posterior'] }
+  ],
+  improve_fitness: [
+    { value: 'general_fitness_focus', label: 'General Fitness', muscles: ['chest', 'back', 'shoulders', 'legs_quad', 'legs_posterior', 'core'] },
+    { value: 'cardio_fitness', label: 'Cardio', muscles: [], cardioBias: true },
+    { value: 'conditioning_fitness', label: 'Conditioning', muscles: [], cardioBias: true },
+    { value: 'work_capacity', label: 'Work Capacity', muscles: ['legs_quad', 'legs_posterior', 'core'], cardioBias: true },
+    { value: 'full_body_fitness', label: 'Full Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs_quad', 'legs_posterior', 'core'] },
+    { value: 'core_fitness', label: 'Core', muscles: ['core'] },
+    { value: 'lower_body_fitness', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general'] }
+  ],
+  improve_mobility: [
+    { value: 'full_body_mobility', label: 'Full Body Mobility', muscles: [], mobilityBias: true },
+    { value: 'upper_body_mobility', label: 'Upper Body Mobility', muscles: ['shoulders', 'back'], mobilityBias: true },
+    { value: 'lower_body_mobility', label: 'Lower Body Mobility', muscles: ['legs_posterior', 'legs_general'], mobilityBias: true },
+    { value: 'hips_mobility', label: 'Hips', muscles: ['legs_posterior'], mobilityBias: true },
+    { value: 'shoulders_mobility', label: 'Shoulders', muscles: ['shoulders'], mobilityBias: true },
+    { value: 'back_mobility', label: 'Back', muscles: ['back'], mobilityBias: true },
+    { value: 'hamstrings_mobility', label: 'Hamstrings', muscles: ['legs_posterior'], mobilityBias: true },
+    { value: 'balance_mobility', label: 'Balance', muscles: ['legs_general'], mobilityBias: true }
+  ]
+};
+
+function getFocusOptionsForGoal(goalKey) {
+  return focusLibrary[goalKey] || [];
+}
+
+function getFocusLabelForGoal(goalKey, focusValue) {
+  const options = getFocusOptionsForGoal(goalKey);
+  const found = options.filter(function(o) { return o.value === focusValue; })[0];
+  return found ? found.label : focusValue;
 }
 
 const DAY_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -1033,14 +1123,15 @@ function onboardingToggleMulti(stepKey, value, max) {
 }
 
 function onboardingNext() {
-  const step = onboardingSteps[state.onboarding.stepIndex];
+  const steps = getEffectiveOnboardingSteps(state.onboarding.goalKey);
+  const step = steps[state.onboarding.stepIndex];
   const answer = state.onboarding.answers[step.key];
   const hasAnswer = step.multi ? (answer && answer.length > 0) : (answer !== undefined && answer !== null);
   if (!hasAnswer && step.key !== 'secondaryFocus' && step.key !== 'avoidExercises') {
     toast('Please make a selection to continue');
     return;
   }
-  if (state.onboarding.stepIndex < onboardingSteps.length - 1) {
+  if (state.onboarding.stepIndex < steps.length - 1) {
     state.onboarding.stepIndex += 1;
     saveState();
     render();
@@ -1087,26 +1178,56 @@ onboardingSteps.forEach(function(step) {
   optionLabelLookups[step.key] = map;
 });
 
+/* =========================================================
+   VERSION 1.1: Goal-aware onboarding steps.
+   For goals using the new focus library (usesFocusLibrary: true), the
+   fixed 'secondaryFocus' step (built for Get Stronger) is replaced with
+   a goal-specific 'Choose Your Areas of Focus' multi-select step sourced
+   from focusLibrary, with no cap on how many can be chosen. For every
+   existing goal, onboardingSteps is used completely unchanged - this
+   never alters the Get Stronger / General Fitness onboarding flow that
+   existing users already know.
+   ========================================================= */
+function getEffectiveOnboardingSteps(goalKey) {
+  const tmpl = goalTemplates[goalKey];
+  if (!tmpl || !tmpl.usesFocusLibrary) return onboardingSteps;
+  const focusOptions = getFocusOptionsForGoal(goalKey);
+  const focusStep = {
+    key: 'secondaryFocus',
+    title: 'Choose Your Areas of Focus',
+    sub: 'You can choose as many as you\u2019d like. These shape emphasis within your program without replacing your overall goal.',
+    multi: true,
+    max: focusOptions.length,
+    options: focusOptions.map(function(f) { return { value: f.value, label: f.label }; })
+  };
+  return [focusStep].concat(onboardingSteps.slice(1));
+}
+
+function getEffectiveOnboardingStep(stepIndex, goalKey) {
+  return getEffectiveOnboardingSteps(goalKey)[stepIndex];
+}
+
 function renderOnboardingStep(container) {
   const app = document.getElementById('app');
   app.innerHTML = '';
-  const step = onboardingSteps[state.onboarding.stepIndex];
+  const step = getEffectiveOnboardingStep(state.onboarding.stepIndex, state.onboarding.goalKey);
+  const totalSteps = getEffectiveOnboardingSteps(state.onboarding.goalKey).length;
   const wrap = document.createElement('div');
   wrap.className = 'goal-screen';
   wrap.style.textAlign = 'left';
 
   const progress = document.createElement('div');
   progress.style.cssText = 'display:flex;gap:4px;margin-bottom:18px;';
-  onboardingSteps.forEach(function(s, i) {
+  for (let i = 0; i < totalSteps; i++) {
     const dot = document.createElement('div');
     dot.style.cssText = 'flex:1;height:4px;border-radius:2px;background:' + (i <= state.onboarding.stepIndex ? '#e8722c' : '#e6e4dc') + ';';
     progress.appendChild(dot);
-  });
+  }
   wrap.appendChild(progress);
 
   const stepCount = document.createElement('div');
   stepCount.style.cssText = 'font-size:12px;color:#999;font-weight:600;margin-bottom:6px;';
-  stepCount.textContent = 'Step ' + (state.onboarding.stepIndex + 1) + ' of ' + onboardingSteps.length;
+  stepCount.textContent = 'Step ' + (state.onboarding.stepIndex + 1) + ' of ' + totalSteps;
   wrap.appendChild(stepCount);
 
   const h = document.createElement('h2');
@@ -1149,7 +1270,7 @@ function renderOnboardingStep(container) {
   navRow.appendChild(backBtn);
   const nextBtn = document.createElement('button');
   nextBtn.style.cssText = 'flex:2;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;';
-  nextBtn.textContent = (state.onboarding.stepIndex === onboardingSteps.length - 1) ? 'Review My Answers' : 'Next';
+  nextBtn.textContent = (state.onboarding.stepIndex === totalSteps - 1) ? 'Review My Answers' : 'Next';
   nextBtn.onclick = onboardingNext;
   navRow.appendChild(nextBtn);
   wrap.appendChild(navRow);
@@ -1182,6 +1303,23 @@ function equipmentAllowsExercise(exId, equipment) {
 }
 
 function getMusclePoolForTemplate(goalKey, subgoalKey) {
+  const tmpl = goalTemplates[goalKey];
+  // Version 1.1 goals (lose_fat, build_muscle, improve_fitness, improve_mobility) have no
+  // fixed programLibrary templates to derive a muscle pool from - they're generated purely
+  // from the guided-onboarding engine. For these, build the pool directly from the full
+  // exerciseLibrary (excluding yoga-only poses, which remain exclusive to the Yoga program
+  // per the "do not modify Yoga" requirement), the same fallback already used below when no
+  // template exists for any goal.
+  if (tmpl && tmpl.usesFocusLibrary) {
+    const muscles = {};
+    Object.keys(exerciseLibrary).forEach(function(exId) {
+      const m = exerciseLibrary[exId].muscle;
+      if (m === 'yoga') return;
+      if (!muscles[m]) muscles[m] = [];
+      muscles[m].push(exId);
+    });
+    return muscles;
+  }
   const key = buildPlanKey(8, goalKey, subgoalKey) || buildPlanKey(8, goalKey, null);
   const template = programLibrary[key] || programLibrary[buildPlanKey(4, goalKey, subgoalKey)] || programLibrary[buildPlanKey(12, goalKey, subgoalKey)];
   const muscles = {};
@@ -1256,31 +1394,91 @@ const secondaryFocusToMuscleGroups = {
   shoulder_health: ['shoulders']
 };
 
-function getFocusMuscleGroups(secondaryFocusList) {
+function getFocusMuscleGroups(secondaryFocusList, goalKey) {
   const muscles = {};
-  (secondaryFocusList || []).forEach(function(focusKey) {
-    (secondaryFocusToMuscleGroups[focusKey] || []).forEach(function(m) { muscles[m] = true; });
-  });
+  const tmpl = goalTemplates[goalKey];
+  if (tmpl && tmpl.usesFocusLibrary) {
+    // Version 1.1 goals: focus values come from focusLibrary[goalKey], each already
+    // carrying its own muscles array.
+    const options = getFocusOptionsForGoal(goalKey);
+    (secondaryFocusList || []).forEach(function(focusValue) {
+      const found = options.filter(function(o) { return o.value === focusValue; })[0];
+      if (found) { (found.muscles || []).forEach(function(m) { muscles[m] = true; }); }
+    });
+  } else {
+    // Existing Get Stronger secondary-focus mapping, completely unchanged.
+    (secondaryFocusList || []).forEach(function(focusKey) {
+      (secondaryFocusToMuscleGroups[focusKey] || []).forEach(function(m) { muscles[m] = true; });
+    });
+  }
   return Object.keys(muscles);
+}
+
+/**
+ * Returns true if any of the chosen focus values for this goal are tagged
+ * cardioBias or mobilityBias in the focus library - meaning the person wants
+ * more cardio/mobility work than the goal's base template would otherwise
+ * include. Used to nudge warmup/finisher selection and exercise count rather
+ * than fabricate a muscle-group bias that doesn't honestly exist.
+ */
+function getFocusBiasFlags(secondaryFocusList, goalKey) {
+  const tmpl = goalTemplates[goalKey];
+  const flags = { cardioBias: false, mobilityBias: false };
+  if (!tmpl || !tmpl.usesFocusLibrary) return flags;
+  const options = getFocusOptionsForGoal(goalKey);
+  (secondaryFocusList || []).forEach(function(focusValue) {
+    const found = options.filter(function(o) { return o.value === focusValue; })[0];
+    if (found) {
+      if (found.cardioBias) flags.cardioBias = true;
+      if (found.mobilityBias) flags.mobilityBias = true;
+    }
+  });
+  return flags;
 }
 
 /**
  * Reorders a flat, deduped exercise-id list so that exercises belonging to the
  * chosen focus muscle groups come first, before the normal rotation is applied.
- * Relative order within each group (focus vs. non-focus) is preserved, so this
- * only shifts priority - it never removes anything from consideration.
+ * When multiple focus muscles are given, groups are interleaved round-robin
+ * (one exercise from each focus group in turn) so that no single focus
+ * dominates just because it happened to be selected or listed first - this
+ * satisfies the "distribute emphasis...prevent one focus from consuming the
+ * entire workout" requirement. Relative order within each group is preserved.
+ * Exercises not belonging to any focus muscle come last, in original order.
  */
 function prioritizeByFocusMuscles(uniqueList, focusMuscles) {
   if (!focusMuscles || focusMuscles.length === 0) return uniqueList;
+  const groups = focusMuscles.map(function(m) {
+    return uniqueList.filter(function(exId) {
+      const ex = exerciseLibrary[exId];
+      return ex && ex.muscle === m;
+    });
+  });
   const focusSet = {};
   focusMuscles.forEach(function(m) { focusSet[m] = true; });
-  const focus = [];
-  const rest = [];
-  uniqueList.forEach(function(exId) {
+  const rest = uniqueList.filter(function(exId) {
     const ex = exerciseLibrary[exId];
-    if (ex && focusSet[ex.muscle]) focus.push(exId); else rest.push(exId);
+    return !(ex && focusSet[ex.muscle]);
   });
-  return focus.concat(rest);
+  const interleaved = [];
+  const seenInInterleave = {};
+  let idx = 0;
+  let anyRemaining = true;
+  while (anyRemaining) {
+    anyRemaining = false;
+    for (let g = 0; g < groups.length; g++) {
+      const candidate = groups[g][idx];
+      if (candidate !== undefined && !seenInInterleave[candidate]) {
+        interleaved.push(candidate);
+        seenInInterleave[candidate] = true;
+        anyRemaining = true;
+      } else if (candidate !== undefined) {
+        anyRemaining = anyRemaining || (groups[g][idx + 1] !== undefined);
+      }
+    }
+    idx++;
+  }
+  return interleaved.concat(rest);
 }
 
 function filterPoolForDayType(musclePool, dayLabelType, effectiveSplit) {
@@ -1296,12 +1494,23 @@ function filterPoolForDayType(musclePool, dayLabelType, effectiveSplit) {
   return filtered;
 }
 
-function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset, effectiveSplit, focusMuscles) {
+function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset, effectiveSplit, focusMuscles, focusBias) {
   const filteredPool = filterPoolForDayType(musclePool, dayLabelType, effectiveSplit);
   const muscleKeys = Object.keys(filteredPool);
   const flatList = [];
   muscleKeys.forEach(function(m) { filteredPool[m].forEach(function(exId) { flatList.push(exId); }); });
-  const uniqueList = flatList.filter(function(v, i) { return flatList.indexOf(v) === i; });
+  let uniqueList = flatList.filter(function(v, i) { return flatList.indexOf(v) === i; });
+
+  // Honest cardio bias: if the person chose a cardio/conditioning-leaning focus, actual
+  // cardio exercises (already present in exerciseLibrary, e.g. treadmill/bike/incline_walk)
+  // are pulled to the front of the rotation so they're more likely to be chosen alongside
+  // strength work, rather than fabricating a muscle-group bias for something that isn't one.
+  if (focusBias && focusBias.cardioBias) {
+    const cardioIds = uniqueList.filter(function(id) { return exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'; });
+    const nonCardioIds = uniqueList.filter(function(id) { return !(exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'); });
+    uniqueList = cardioIds.concat(nonCardioIds);
+  }
+
   const prioritized = prioritizeByFocusMuscles(uniqueList, focusMuscles);
   const rotated = prioritized.slice(rotationOffset).concat(prioritized.slice(0, rotationOffset));
 
@@ -1313,6 +1522,14 @@ function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList,
   if (focusMuscles && focusMuscles.length > 0) {
     const presentFocusMuscles = focusMuscles.filter(function(m) { return filteredPool[m] && filteredPool[m].length > 0; });
     effectiveExCount = exCount + Math.min(presentFocusMuscles.length, 2);
+  }
+  // Mobility bias: there's no dedicated selectable mobility-exercise pool beyond the
+  // fixed daily mobility warmup block, so rather than pretend to bias exercise
+  // selection toward "mobility," this honestly reduces the strength-exercise count
+  // slightly and leans on the existing mobility warmup + a longer cooldown walk,
+  // which are real, working parts of every generated day already.
+  if (focusBias && focusBias.mobilityBias) {
+    effectiveExCount = Math.max(2, effectiveExCount - 1);
   }
 
   const chosen = [];
@@ -1366,7 +1583,8 @@ function generatePersonalizedProgram() {
   const dayTypeLabels = dayTypeLabelsForSplit(effective.split, answers.frequency);
   const musclePool = getMusclePoolForTemplate(goalKey, subgoalKey);
   const exCount = exercisesPerDayForDuration(answers.duration);
-  const focusMuscles = getFocusMuscleGroups(answers.secondaryFocus);
+  const focusMuscles = getFocusMuscleGroups(answers.secondaryFocus, goalKey);
+  const focusBias = getFocusBiasFlags(answers.secondaryFocus, goalKey);
 
   const newActivePlan = {};
   DAY_ORDER.forEach(function(dk) {
@@ -1380,7 +1598,7 @@ function generatePersonalizedProgram() {
         stepsGoal: '8,000+'
       };
     } else {
-      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout, effective.split, focusMuscles);
+      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout, effective.split, focusMuscles, focusBias);
     }
   });
 
@@ -1412,18 +1630,25 @@ function estimateCompletionDate(weeks) {
 
 function buildProgramHighlights(answers) {
   const highlights = [];
-  const goalLabel = goalTemplates[state.onboarding.goalKey] ? goalTemplates[state.onboarding.goalKey].label : '';
+  const goalKey = state.onboarding.goalKey;
+  const tmpl = goalTemplates[goalKey];
+  const goalLabel = tmpl ? tmpl.label : '';
   highlights.push('Built around ' + goalLabel);
   if (answers.secondaryFocus && answers.secondaryFocus.length > 0) {
-    const biasedFoci = answers.secondaryFocus.filter(function(v) { return secondaryFocusToMuscleGroups[v]; });
-    const infoOnlyFoci = answers.secondaryFocus.filter(function(v) { return !secondaryFocusToMuscleGroups[v]; });
-    if (biasedFoci.length > 0) {
-      const fociLabels = biasedFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
-      highlights.push('Extra exercises prioritized for ' + fociLabels);
-    }
-    if (infoOnlyFoci.length > 0) {
-      const infoLabels = infoOnlyFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
-      highlights.push(infoLabels + ' noted as a goal, though exercise selection isn\u2019t adjusted for it specifically');
+    if (tmpl && tmpl.usesFocusLibrary) {
+      const fociLabels = answers.secondaryFocus.map(function(v) { return getFocusLabelForGoal(goalKey, v); }).join(', ');
+      highlights.push('Areas of focus: ' + fociLabels + ' (emphasis balanced across all selected areas)');
+    } else {
+      const biasedFoci = answers.secondaryFocus.filter(function(v) { return secondaryFocusToMuscleGroups[v]; });
+      const infoOnlyFoci = answers.secondaryFocus.filter(function(v) { return !secondaryFocusToMuscleGroups[v]; });
+      if (biasedFoci.length > 0) {
+        const fociLabels = biasedFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
+        highlights.push('Extra exercises prioritized for ' + fociLabels);
+      }
+      if (infoOnlyFoci.length > 0) {
+        const infoLabels = infoOnlyFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
+        highlights.push(infoLabels + ' noted as a goal, though exercise selection isn\u2019t adjusted for it specifically');
+      }
     }
   }
   const effective = resolveEffectiveSplit(answers.frequency, answers.split);
@@ -1457,7 +1682,7 @@ function renderOnboardingSummary() {
     : goalTmpl.label;
   const rows = [
     ['Program', goalRowLabel],
-    ['Secondary Focus', (answers.secondaryFocus && answers.secondaryFocus.length > 0) ? answers.secondaryFocus.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(', ') : 'None'],
+    ['Secondary Focus', (answers.secondaryFocus && answers.secondaryFocus.length > 0) ? answers.secondaryFocus.map(function(v) { return goalTmpl.usesFocusLibrary ? getFocusLabelForGoal(state.onboarding.goalKey, v) : optionLabelLookups.secondaryFocus[v]; }).join(', ') : 'None'],
     ['Experience', optionLabelLookups.experience[answers.experience]],
     ['Frequency', answers.frequency + ' days per week'],
     ['Duration', answers.duration + ' minutes'],
@@ -1629,6 +1854,29 @@ function takeAutoBackupIfDue() {
   }
 }
 
+/* =========================================================
+   VERSION 1.1: New exercises for the new goals.
+   Merged into exerciseLibrary at runtime (never written into programData.json),
+   using the exact same structure and How-To mechanism (YT search-query helper)
+   as every existing exercise, so they behave identically - swappable, graphable,
+   suggestible, and clickable exactly like a built-in exercise. This only adds
+   entries; it never touches or overwrites anything already in programData.json.
+   ========================================================= */
+const version11NewExercises = {
+  jump_rope: { name: 'Jump Rope', muscle: 'cardio', scheme: '5 rounds x 1 min', link: YT('jump rope proper form'), noWeight: true },
+  kettlebell_swing: { name: 'Kettlebell Swing', muscle: 'legs_posterior', scheme: '4 x 15', link: YT('kettlebell swing proper form') },
+  battle_ropes: { name: 'Battle Ropes', muscle: 'cardio', scheme: '5 rounds x 30 sec', link: YT('battle ropes proper form'), noWeight: true },
+  rowing_machine: { name: 'Rowing Machine', muscle: 'cardio', scheme: '15-20 min', link: YT('rowing machine proper form'), noWeight: true },
+  hip_flexor_stretch: { name: 'Hip Flexor Stretch', muscle: 'core', scheme: '3 x 30 sec each side', link: YT('hip flexor stretch proper form'), noWeight: true },
+  worlds_greatest_stretch: { name: 'World\u2019s Greatest Stretch', muscle: 'legs_posterior', scheme: '3 x 5 each side', link: YT('world\u2019s greatest stretch proper form'), noWeight: true },
+  shoulder_dislocates: { name: 'Shoulder Dislocates (Band)', muscle: 'shoulders', scheme: '3 x 12', link: YT('band shoulder dislocates proper form'), noWeight: true },
+  single_leg_balance: { name: 'Single-Leg Balance Hold', muscle: 'legs_general', scheme: '3 x 30 sec each side', link: YT('single leg balance hold proper form'), noWeight: true },
+  ninety_ninety_hip_stretch: { name: '90/90 Hip Stretch', muscle: 'legs_posterior', scheme: '3 x 45 sec each side', link: YT('90 90 hip stretch proper form'), noWeight: true },
+  thoracic_rotation: { name: 'Thoracic Spine Rotation', muscle: 'back', scheme: '3 x 10 each side', link: YT('thoracic spine rotation stretch proper form'), noWeight: true },
+  downward_dog_stretch: { name: 'Downward Dog Stretch', muscle: 'legs_posterior', scheme: '3 x 30 sec', link: YT('downward dog stretch proper form'), noWeight: true },
+  standing_calf_stretch: { name: 'Standing Calf Stretch', muscle: 'calves', scheme: '3 x 30 sec each side', link: YT('standing calf stretch proper form'), noWeight: true }
+};
+
 async function loadProgramData() {
   const bannerContainer = document.getElementById('app');
   try {
@@ -1637,6 +1885,10 @@ async function loadProgramData() {
     const data = await response.json();
     exerciseLibrary = data.exerciseLibrary;
     programLibrary = data.programLibrary;
+    // Version 1.1: merge in new exercises without touching programData.json itself.
+    // Object.assign only adds these ids; it can never overwrite an existing exercise
+    // since these ids are all new and don't collide with anything already loaded.
+    Object.assign(exerciseLibrary, version11NewExercises);
     Object.keys(exerciseLibrary).forEach(function(id) {
       const m = exerciseLibrary[id].muscle;
       if (!substituteGroups[m]) substituteGroups[m] = [];
@@ -1958,6 +2210,27 @@ function computeAllCustomExerciseIds() {
   return Object.keys(customLib).filter(function(id) { return !customLib[id].archived; });
 }
 
+/**
+ * Returns every distinct exercise id that has at least one entry in
+ * workout-optional-history-v1, regardless of whether that id belongs to a
+ * user-created custom exercise or a built-in exercise (e.g. a built-in lift
+ * logged as an "Optional Extra" on a day it isn't normally scheduled, such
+ * as a rest day). This is needed because computeAllCustomExerciseIds() only
+ * covers user-created exercises - a built-in id logged this way would
+ * otherwise never surface on any Progress tab graph, even though it's
+ * correctly tracked and shown on the day's own card.
+ */
+function getAllOptionallyLoggedExerciseIds() {
+  const history = loadOptionalHistory();
+  const ids = {};
+  Object.keys(history).forEach(function(bucketKey) {
+    (history[bucketKey] || []).forEach(function(entry) {
+      if (entry && entry.exId) ids[entry.exId] = true;
+    });
+  });
+  return Object.keys(ids);
+}
+
 function renderCustomExerciseManager(container) {
   const customLib = loadCustomExercises();
   const ids = Object.keys(customLib);
@@ -2116,8 +2389,16 @@ function renderProteinGoalSetup() {
 function chooseGoalTop(goalKey) {
   state.selectedGoal = goalKey;
   const tmpl = goalTemplates[goalKey];
-  if (tmpl.subgoals) { state.screen = 'select_subgoal'; saveState(); render(); }
-  else { state.selectedSubgoal = null; startGuidedOnboarding(goalKey, null); }
+  if (tmpl.usesFocusLibrary) {
+    // New Version 1.1 goals: skip the old single-select subgoal screen entirely and
+    // go straight into guided onboarding, which now includes a goal-aware multi-select
+    // "Areas of Focus" step (see onboardingSteps) instead of a fixed subgoal.
+    startGuidedOnboarding(goalKey, null);
+  } else if (tmpl.subgoals) {
+    state.screen = 'select_subgoal'; saveState(); render();
+  } else {
+    state.selectedSubgoal = null; startGuidedOnboarding(goalKey, null);
+  }
 }
 
 function chooseSubgoal(subgoalKey) {
@@ -4938,6 +5219,7 @@ function renderProgressScreen(container) {
     if (entries.length === 0) return;
     const def = getAnyExerciseDef(exId);
     if (!def) return;
+    seen[exId] = true;
     if (entries.length < 2) {
       const card = document.createElement('div');
       card.className = 'progress-ex-card';
@@ -4955,6 +5237,39 @@ function renderProgressScreen(container) {
       return { label: e.date.slice(5), val: e.weight, cycle: 1, week: i + 1 };
     });
     content.appendChild(buildLineChart(def.name + ' (custom)', points, '#c2427a', true));
+  });
+
+  // Built-in exercises logged as "Optional Extras" (e.g. an exercise done on a day
+  // it isn't normally scheduled) aren't covered by either loop above - the first
+  // loop only reads prescribed-program weights, and customExerciseIds only covers
+  // user-created exercises. This closes that gap so any built-in exercise with
+  // optional-history entries also gets its own graph, without duplicating anything
+  // already graphed as a prescribed exercise or a custom exercise above.
+  const allOptionalIds = getAllOptionallyLoggedExerciseIds();
+  allOptionalIds.forEach(function(exId) {
+    if (seen[exId]) return; // already graphed via prescribed weights or custom-exercise loop
+    const entries = getOptionalEntriesForExercise(exId);
+    if (entries.length === 0) return;
+    const def = getAnyExerciseDef(exId);
+    if (!def) return;
+    seen[exId] = true;
+    if (entries.length < 2) {
+      const card = document.createElement('div');
+      card.className = 'progress-ex-card';
+      const h = document.createElement('h4');
+      h.textContent = def.name + ' (optional)';
+      card.appendChild(h);
+      const nd = document.createElement('div');
+      nd.className = 'no-data';
+      nd.textContent = '1 entry logged (' + entries[0].date + ': ' + entries[0].weight + ' lbs) - need 2+ to graph';
+      card.appendChild(nd);
+      content.appendChild(card);
+      return;
+    }
+    const points = entries.map(function(e, i) {
+      return { label: e.date.slice(5), val: e.weight, cycle: 1, week: i + 1 };
+    });
+    content.appendChild(buildLineChart(def.name + ' (optional)', points, '#3a7ae8', true));
   });
   container.appendChild(content);
 }
