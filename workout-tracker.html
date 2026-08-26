@@ -3400,13 +3400,38 @@ function deleteCycle(cycleNum) {
   toast('Cycle ' + cycleNum + ' deleted');
 }
 
+/**
+ * BUG FIX: returns true if cycle c genuinely still has data associated with it
+ * (logged weights, protein, or an archived checkpoint), or is the current active
+ * cycle. This is the exact same existence test deleteCycle() already uses when
+ * deciding which cycle becomes the new "highest" after a deletion - reused here
+ * rather than duplicated, so the two stay in sync by construction.
+ */
+function cycleActuallyExists(c) {
+  if (c === state.cycle) return true;
+  const hasWeights = Object.keys(state.weights).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
+  const hasProtein = Object.keys(state.proteinEntries).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
+  const hasArchive = (state.archivedCheckpoints || []).some(function(a) { return a.cycle === c; });
+  return hasWeights || hasProtein || hasArchive;
+}
+
 function renderCycleManager(container) {
   if (state.cycle <= 1) return;
   const wrap = document.createElement('div');
   wrap.className = 'card';
   wrap.style.cssText = 'border: 1px solid #f0cba4;';
   wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Manage cycles</p><p class="ex-scheme" style="margin-bottom:10px;">Delete cycles you did not mean to create. This only affects this device.</p>';
+  // BUG FIX: previously looped every integer from 1 to state.cycle unconditionally,
+  // which meant a deleted cycle whose number fell below the new highest remaining
+  // cycle would still render as a "ghost" row with no data behind it, making the
+  // deletion look like it hadn't taken effect. Now only cycles that genuinely still
+  // exist are rendered, computed fresh from current state on every render - so a
+  // deletion followed by a re-render (or a page refresh, which rebuilds this list
+  // from the same persisted state) can never bring a ghost row back.
+  let anyRowRendered = false;
   for (let c = 1; c <= state.cycle; c++) {
+    if (!cycleActuallyExists(c)) continue;
+    anyRowRendered = true;
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #f0efe9;';
     const isCurrent = c === state.cycle;
@@ -3418,6 +3443,7 @@ function renderCycleManager(container) {
     row.appendChild(delBtn);
     wrap.appendChild(row);
   }
+  if (!anyRowRendered) return;
   container.appendChild(wrap);
 }
 
