@@ -1195,7 +1195,7 @@ function getEffectiveOnboardingSteps(goalKey) {
   const focusStep = {
     key: 'secondaryFocus',
     title: 'Choose Your Areas of Focus',
-    sub: 'You can choose as many as you\u2019d like. These shape emphasis within your program without replacing your overall goal.',
+    sub: 'Choose as many as you\u2019d like. For best results, select the areas that matter most to you \u2014 if you choose several, the program will balance emphasis across them rather than maxing out every one.',
     multi: true,
     max: focusOptions.length,
     options: focusOptions.map(function(f) { return { value: f.value, label: f.label }; })
@@ -1288,6 +1288,13 @@ function exercisesPerDayForDuration(duration) {
 function equipmentAllowsExercise(exId, equipment) {
   const ex = exerciseLibrary[exId];
   if (!ex) return false;
+  // FINAL CORRECTION: if this exercise carries an explicit equipment tag (currently
+  // only the Version 1.1 exercises), that tag is authoritative and noWeight is never
+  // treated as a stand-in for "works with any equipment." Every pre-existing exercise
+  // has no "equipment" field and falls through to the original logic below, unchanged.
+  if (ex.equipment && equipmentTagAllowedFor[ex.equipment]) {
+    return equipmentTagAllowedFor[ex.equipment].indexOf(equipment) !== -1;
+  }
   const machineExercises = ['chest_press_machine', 'shoulder_press_machine', 'leg_press', 'lat_pulldown', 'chest_supported_row', 'seated_cable_row', 'cable_lateral_raise', 'cable_curl', 'triceps_pushdown', 'leg_extension', 'seated_leg_curl', 'calf_raise_machine', 'smith_rdl', 'smith_hip_thrust', 'hip_abductor', 'hip_adductor', 'rear_delt_pec_deck', 'torso_rotation', 'ab_crunch_machine', 'cable_woodchop', 'cable_chest_press', 'face_pull', 'straight_arm_pulldown'];
   const dumbbellExercises = ['incline_db_press', 'flat_db_press', 'db_shoulder_press', 'db_lateral_raise', 'hammer_curl', 'db_curl', 'goblet_squat', 'triceps_kickback', 'overhead_triceps_ext'];
   if (equipment === 'bodyweight_only') {
@@ -1304,17 +1311,19 @@ function equipmentAllowsExercise(exId, equipment) {
 
 function getMusclePoolForTemplate(goalKey, subgoalKey) {
   const tmpl = goalTemplates[goalKey];
-  // Version 1.1 goals (lose_fat, build_muscle, improve_fitness, improve_mobility) have no
-  // fixed programLibrary templates to derive a muscle pool from - they're generated purely
-  // from the guided-onboarding engine. For these, build the pool directly from the full
-  // exerciseLibrary (excluding yoga-only poses, which remain exclusive to the Yoga program
-  // per the "do not modify Yoga" requirement), the same fallback already used below when no
-  // template exists for any goal.
   if (tmpl && tmpl.usesFocusLibrary) {
     const muscles = {};
     Object.keys(exerciseLibrary).forEach(function(exId) {
       const m = exerciseLibrary[exId].muscle;
       if (m === 'yoga') return;
+      // FINAL CORRECTION: the Improve Mobility & Flexibility goal previously mixed
+      // mobility/stretch exercises into the same muscle buckets as heavy strength
+      // exercises with no way to tell them apart, so mobility work rarely if ever
+      // got selected. For this goal specifically, the pool is now built ONLY from
+      // exercises tagged isMobility - a real, working exercise list rather than a
+      // guess based on shared muscle keys. Every other goal (including all existing
+      // ones) is completely unaffected by this branch.
+      if (goalKey === 'improve_mobility' && !exerciseLibrary[exId].isMobility) return;
       if (!muscles[m]) muscles[m] = [];
       muscles[m].push(exId);
     });
@@ -1351,6 +1360,58 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
     });
   }
   return muscles;
+}
+
+/**
+ * Maps mobility-related focus values to the specific mobility exercise ids they
+ * should prioritize, so "Hips" genuinely surfaces hip-mobility work first, "Shoulders"
+ * surfaces shoulder/thoracic mobility, etc., rather than the goal treating all mobility
+ * focuses identically. "Full Body Mobility" intentionally covers the whole pool for
+ * balanced coverage per the spec.
+ */
+const mobilityFocusToExerciseIds = {
+  hips_mobility: ['hip_flexor_stretch', 'ninety_ninety_hip_stretch', 'worlds_greatest_stretch'],
+  shoulders_mobility: ['shoulder_dislocates', 'thoracic_rotation'],
+  back_mobility: ['thoracic_rotation', 'downward_dog_stretch'],
+  hamstrings_mobility: ['downward_dog_stretch', 'worlds_greatest_stretch'],
+  balance_mobility: ['single_leg_balance'],
+  upper_body_mobility: ['shoulder_dislocates', 'thoracic_rotation'],
+  lower_body_mobility: ['hip_flexor_stretch', 'ninety_ninety_hip_stretch', 'downward_dog_stretch', 'standing_calf_stretch', 'worlds_greatest_stretch'],
+  full_body_mobility: ['hip_flexor_stretch', 'worlds_greatest_stretch', 'shoulder_dislocates', 'single_leg_balance', 'ninety_ninety_hip_stretch', 'thoracic_rotation', 'downward_dog_stretch', 'standing_calf_stretch']
+};
+
+/**
+ * Given the person's chosen mobility focus values, returns the specific mobility
+ * exercise ids to prioritize, balanced round-robin across focuses (same principle as
+ * prioritizeByFocusMuscles) so selecting several mobility focuses doesn't let the
+ * first one dominate. Returns null when the goal isn't Improve Mobility & Flexibility,
+ * so this never affects any other goal's generation.
+ */
+function getMobilityFocusExerciseIds(secondaryFocusList, goalKey) {
+  if (goalKey !== 'improve_mobility') return null;
+  const groups = (secondaryFocusList || [])
+    .map(function(f) { return mobilityFocusToExerciseIds[f] || []; })
+    .filter(function(g) { return g.length > 0; });
+  if (groups.length === 0) return null;
+  const interleaved = [];
+  const seen = {};
+  let idx = 0;
+  let anyRemaining = true;
+  while (anyRemaining) {
+    anyRemaining = false;
+    for (let g = 0; g < groups.length; g++) {
+      const candidate = groups[g][idx];
+      if (candidate !== undefined && !seen[candidate]) {
+        interleaved.push(candidate);
+        seen[candidate] = true;
+        anyRemaining = true;
+      } else if (candidate !== undefined) {
+        anyRemaining = anyRemaining || (groups[g][idx + 1] !== undefined);
+      }
+    }
+    idx++;
+  }
+  return interleaved;
 }
 
 function substituteIfAvoided(exId, avoidList, equipment) {
@@ -1494,7 +1555,7 @@ function filterPoolForDayType(musclePool, dayLabelType, effectiveSplit) {
   return filtered;
 }
 
-function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset, effectiveSplit, focusMuscles, focusBias) {
+function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList, equipment, rotationOffset, effectiveSplit, focusMuscles, focusBias, mobilityFocusIds) {
   const filteredPool = filterPoolForDayType(musclePool, dayLabelType, effectiveSplit);
   const muscleKeys = Object.keys(filteredPool);
   const flatList = [];
@@ -1509,6 +1570,18 @@ function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList,
     const cardioIds = uniqueList.filter(function(id) { return exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'; });
     const nonCardioIds = uniqueList.filter(function(id) { return !(exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'); });
     uniqueList = cardioIds.concat(nonCardioIds);
+  }
+
+  // FINAL CORRECTION: for Improve Mobility & Flexibility, mobilityFocusIds carries the
+  // specific mobility exercises the person's chosen focuses should prioritize (e.g. hip
+  // stretches for a "Hips" focus). These are pulled to the very front of the rotation,
+  // ahead of even the general focus-muscle prioritization, so the program genuinely
+  // contains real mobility work instead of defaulting back to ordinary strength exercises
+  // that happen to share a muscle-group key.
+  if (mobilityFocusIds && mobilityFocusIds.length > 0) {
+    const presentMobilityIds = mobilityFocusIds.filter(function(id) { return uniqueList.indexOf(id) !== -1; });
+    const restIds = uniqueList.filter(function(id) { return presentMobilityIds.indexOf(id) === -1; });
+    uniqueList = presentMobilityIds.concat(restIds);
   }
 
   const prioritized = prioritizeByFocusMuscles(uniqueList, focusMuscles);
@@ -1527,7 +1600,11 @@ function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList,
   // fixed daily mobility warmup block, so rather than pretend to bias exercise
   // selection toward "mobility," this honestly reduces the strength-exercise count
   // slightly and leans on the existing mobility warmup + a longer cooldown walk,
-  // which are real, working parts of every generated day already.
+  // which are real, working parts of every generated day already. This still applies
+  // for non-mobility goals that happen to select a mobility-tagged focus; for the
+  // Improve Mobility & Flexibility goal itself, mobilityFocusIds above already ensures
+  // real mobility exercises are prioritized, so this reduction simply keeps the total
+  // session length reasonable rather than acting as the only mobility mechanism.
   if (focusBias && focusBias.mobilityBias) {
     effectiveExCount = Math.max(2, effectiveExCount - 1);
   }
@@ -1585,6 +1662,7 @@ function generatePersonalizedProgram() {
   const exCount = exercisesPerDayForDuration(answers.duration);
   const focusMuscles = getFocusMuscleGroups(answers.secondaryFocus, goalKey);
   const focusBias = getFocusBiasFlags(answers.secondaryFocus, goalKey);
+  const mobilityFocusIds = getMobilityFocusExerciseIds(answers.secondaryFocus, goalKey);
 
   const newActivePlan = {};
   DAY_ORDER.forEach(function(dk) {
@@ -1598,7 +1676,7 @@ function generatePersonalizedProgram() {
         stepsGoal: '8,000+'
       };
     } else {
-      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout, effective.split, focusMuscles, focusBias);
+      newActivePlan[dk] = buildGeneratedDay(dk, dayTypeLabels[idxInWorkout], musclePool, exCount, answers.avoidExercises, answers.equipment, idxInWorkout, effective.split, focusMuscles, focusBias, mobilityFocusIds);
     }
   });
 
@@ -1637,7 +1715,7 @@ function buildProgramHighlights(answers) {
   if (answers.secondaryFocus && answers.secondaryFocus.length > 0) {
     if (tmpl && tmpl.usesFocusLibrary) {
       const fociLabels = answers.secondaryFocus.map(function(v) { return getFocusLabelForGoal(goalKey, v); }).join(', ');
-      highlights.push('Areas of focus: ' + fociLabels + ' (emphasis balanced across all selected areas)');
+      highlights.push('Areas of focus: ' + fociLabels + '. Your program will balance emphasis across these areas while keeping ' + goalLabel + ' as the primary goal.');
     } else {
       const biasedFoci = answers.secondaryFocus.filter(function(v) { return secondaryFocusToMuscleGroups[v]; });
       const infoOnlyFoci = answers.secondaryFocus.filter(function(v) { return !secondaryFocusToMuscleGroups[v]; });
@@ -1861,20 +1939,44 @@ function takeAutoBackupIfDue() {
    as every existing exercise, so they behave identically - swappable, graphable,
    suggestible, and clickable exactly like a built-in exercise. This only adds
    entries; it never touches or overwrites anything already in programData.json.
+
+   FINAL CORRECTION: each new exercise now carries an explicit "equipment" tag
+   rather than relying on noWeight as a stand-in for equipment availability.
+   noWeight only ever meant "don't show a weight-tracking field" - it never
+   meant "usable with any equipment," and treating it that way incorrectly
+   allowed jump rope / battle ropes / rowing machine under Bodyweight Only.
+   Genuine bodyweight/mobility movements are tagged equipment: 'bodyweight'
+   and remain available everywhere, as they should be.
    ========================================================= */
 const version11NewExercises = {
-  jump_rope: { name: 'Jump Rope', muscle: 'cardio', scheme: '5 rounds x 1 min', link: YT('jump rope proper form'), noWeight: true },
-  kettlebell_swing: { name: 'Kettlebell Swing', muscle: 'legs_posterior', scheme: '4 x 15', link: YT('kettlebell swing proper form') },
-  battle_ropes: { name: 'Battle Ropes', muscle: 'cardio', scheme: '5 rounds x 30 sec', link: YT('battle ropes proper form'), noWeight: true },
-  rowing_machine: { name: 'Rowing Machine', muscle: 'cardio', scheme: '15-20 min', link: YT('rowing machine proper form'), noWeight: true },
-  hip_flexor_stretch: { name: 'Hip Flexor Stretch', muscle: 'core', scheme: '3 x 30 sec each side', link: YT('hip flexor stretch proper form'), noWeight: true },
-  worlds_greatest_stretch: { name: 'World\u2019s Greatest Stretch', muscle: 'legs_posterior', scheme: '3 x 5 each side', link: YT('world\u2019s greatest stretch proper form'), noWeight: true },
-  shoulder_dislocates: { name: 'Shoulder Dislocates (Band)', muscle: 'shoulders', scheme: '3 x 12', link: YT('band shoulder dislocates proper form'), noWeight: true },
-  single_leg_balance: { name: 'Single-Leg Balance Hold', muscle: 'legs_general', scheme: '3 x 30 sec each side', link: YT('single leg balance hold proper form'), noWeight: true },
-  ninety_ninety_hip_stretch: { name: '90/90 Hip Stretch', muscle: 'legs_posterior', scheme: '3 x 45 sec each side', link: YT('90 90 hip stretch proper form'), noWeight: true },
-  thoracic_rotation: { name: 'Thoracic Spine Rotation', muscle: 'back', scheme: '3 x 10 each side', link: YT('thoracic spine rotation stretch proper form'), noWeight: true },
-  downward_dog_stretch: { name: 'Downward Dog Stretch', muscle: 'legs_posterior', scheme: '3 x 30 sec', link: YT('downward dog stretch proper form'), noWeight: true },
-  standing_calf_stretch: { name: 'Standing Calf Stretch', muscle: 'calves', scheme: '3 x 30 sec each side', link: YT('standing calf stretch proper form'), noWeight: true }
+  jump_rope: { name: 'Jump Rope', muscle: 'cardio', scheme: '5 rounds x 1 min', link: YT('jump rope proper form'), noWeight: true, equipment: 'jump_rope' },
+  kettlebell_swing: { name: 'Kettlebell Swing', muscle: 'legs_posterior', scheme: '4 x 15', link: YT('kettlebell swing proper form'), equipment: 'kettlebell' },
+  battle_ropes: { name: 'Battle Ropes', muscle: 'cardio', scheme: '5 rounds x 30 sec', link: YT('battle ropes proper form'), noWeight: true, equipment: 'battle_ropes' },
+  rowing_machine: { name: 'Rowing Machine', muscle: 'cardio', scheme: '15-20 min', link: YT('rowing machine proper form'), noWeight: true, equipment: 'cardio_machine' },
+  hip_flexor_stretch: { name: 'Hip Flexor Stretch', muscle: 'core', scheme: '3 x 30 sec each side', link: YT('hip flexor stretch proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true },
+  worlds_greatest_stretch: { name: 'World\u2019s Greatest Stretch', muscle: 'legs_posterior', scheme: '3 x 5 each side', link: YT('world\u2019s greatest stretch proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true },
+  shoulder_dislocates: { name: 'Shoulder Dislocates (Band)', muscle: 'shoulders', scheme: '3 x 12', link: YT('band shoulder dislocates proper form'), noWeight: true, equipment: 'resistance_band', isMobility: true },
+  single_leg_balance: { name: 'Single-Leg Balance Hold', muscle: 'legs_general', scheme: '3 x 30 sec each side', link: YT('single leg balance hold proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true },
+  ninety_ninety_hip_stretch: { name: '90/90 Hip Stretch', muscle: 'legs_posterior', scheme: '3 x 45 sec each side', link: YT('90 90 hip stretch proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true },
+  thoracic_rotation: { name: 'Thoracic Spine Rotation', muscle: 'back', scheme: '3 x 10 each side', link: YT('thoracic spine rotation stretch proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true },
+  downward_dog_stretch: { name: 'Downward Dog Stretch', muscle: 'legs_posterior', scheme: '3 x 30 sec', link: YT('downward dog stretch proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true },
+  standing_calf_stretch: { name: 'Standing Calf Stretch', muscle: 'calves', scheme: '3 x 30 sec each side', link: YT('standing calf stretch proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true }
+};
+
+/**
+ * Which equipment-selection option(s) a given tagged equipment type is allowed under.
+ * Only applies to exercises carrying an explicit "equipment" field (currently just the
+ * 12 new Version 1.1 exercises) - every pre-existing exercise is untouched and keeps
+ * being governed entirely by the original machineExercises/dumbbellExercises/noWeight
+ * logic in equipmentAllowsExercise(), so no existing behavior changes.
+ */
+const equipmentTagAllowedFor = {
+  jump_rope: ['full_gym', 'planet_fitness', 'home_gym'],
+  kettlebell: ['full_gym', 'planet_fitness', 'home_gym'],
+  battle_ropes: ['full_gym', 'home_gym'],
+  cardio_machine: ['full_gym', 'planet_fitness', 'home_gym'],
+  resistance_band: ['full_gym', 'planet_fitness', 'home_gym', 'bodyweight_only', 'dumbbells_only'],
+  bodyweight: ['full_gym', 'planet_fitness', 'home_gym', 'bodyweight_only', 'dumbbells_only']
 };
 
 async function loadProgramData() {
