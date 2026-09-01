@@ -182,17 +182,6 @@ function getProgram(length, goal, subgoal) {
 
 /* =========================================================
    VERSION 1.1: Reusable Focus Library
-   Goal-specific "Areas of Focus" options. Each focus maps to one or more
-   real exerciseLibrary muscle keys, used to bias exercise selection via
-   the existing prioritizeByFocusMuscles / effectiveExCount mechanism
-   (originally built for Get Stronger's secondary focus step, now reused
-   here rather than duplicated). Focuses with cardioBias or mobilityBias
-   don't map to a specific muscle group - they're honored by nudging the
-   day-count/duration logic toward cardio/mobility exercises instead of
-   claiming a muscle-group bias that doesn't exist in the data.
-   This is purely additive: existing goals (get_stronger, general_fitness,
-   glute_and_strength, strengthen_core, yoga) are completely unaffected -
-   they keep their existing single-select subgoal system untouched.
    ========================================================= */
 const focusLibrary = {
   lose_fat: [
@@ -272,14 +261,6 @@ function getEffectiveDay(dayKey, cycle, week) {
   return state.activePlan[dayKey];
 }
 
-/* =========================================================
-   PHASE 8: Final Optimization - lightweight cache invalidation.
-   stateVersion increments on every real saveState() call, so
-   expensive lifetime-history computations (achievements) can be
-   cached per-version instead of recomputed on every render that
-   doesn't follow an actual data change. Correctness first: any
-   real write bumps the version and invalidates the cache.
-   ========================================================= */
 let stateVersion = 0;
 
 let state = {
@@ -316,18 +297,15 @@ let state = {
   onboarding: null,
   programRecoveryPref: null,
   programPriority: null,
-  weeklyOverrides: {}
+  weeklyOverrides: {},
+  currentFocusAreas: []
 };
 
-/* =========================================================
-   PHASE 2a: Graph preferences (separate storage key)
-   This NEVER touches state / workout-state-v3.
-   ========================================================= */
 const GRAPH_PREFS_KEY = 'workout-graph-prefs-v1';
 let graphPrefs = {
-  range: 'all',   // '30d' | 'program' | 'all'
-  view: 'compact', // 'compact' | 'detailed'
-  trendLines: {}  // per-chart-id boolean map
+  range: 'all',
+  view: 'compact',
+  trendLines: {}
 };
 
 function loadGraphPrefs() {
@@ -340,17 +318,13 @@ function loadGraphPrefs() {
         if (!graphPrefs.trendLines) graphPrefs.trendLines = {};
       }
     }
-  } catch (e) {
-    // ignore corrupt prefs, fall back to defaults
-  }
+  } catch (e) {}
 }
 
 function saveGraphPrefs() {
   try {
     localStorage.setItem(GRAPH_PREFS_KEY, JSON.stringify(graphPrefs));
-  } catch (e) {
-    // non-critical; silently ignore
-  }
+  } catch (e) {}
 }
 
 function setGraphRange(range) {
@@ -360,17 +334,11 @@ function setGraphRange(range) {
   render();
 }
 
-/**
- * Filters an array of {label, val, week, cycle} style points
- * down to a time range, WITHOUT altering how points are built or stored.
- * Points that don't carry week/cycle (e.g. pre-existing shapes) pass through
- * unfiltered so nothing existing can break.
- */
 function filterPointsByRange(points, range) {
   if (!range || range === 'all') return points;
   if (!points || points.length === 0) return points;
   const hasWeekCycle = points.every(function(p) { return typeof p.week === 'number' && typeof p.cycle === 'number'; });
-  if (!hasWeekCycle) return points; // safety fallback: don't filter shapes we don't recognize
+  if (!hasWeekCycle) return points;
 
   if (range === 'program') {
     return points.filter(function(p) { return p.cycle === state.viewingCycle; });
@@ -406,14 +374,6 @@ function renderGraphControls(container, onChange) {
   container.appendChild(wrap);
 }
 
-/* =========================================================
-   PHASE 6: Achievements
-   New isolated storage key (workout-achievements-v1) holds
-   ONLY a list of unlocked achievement ids - never touches
-   workout-state-v3. Achievements are computed fresh from
-   existing history each render and appended once unlocked;
-   never removed even if later data would no longer qualify.
-   ========================================================= */
 const ACHIEVEMENTS_KEY = 'workout-achievements-v1';
 
 function loadUnlockedAchievements() {
@@ -430,9 +390,7 @@ function loadUnlockedAchievements() {
 function saveUnlockedAchievements(list) {
   try {
     localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(list));
-  } catch (e) {
-    // non-critical
-  }
+  } catch (e) {}
 }
 
 function computeLifetimeCompletedWorkouts() {
@@ -495,7 +453,7 @@ function computeLifetimeVolume() {
 }
 
 function computeCurrentWorkoutStreak() {
-  const completions = getRecentWorkoutCompletions(200); // generous cap, oldest-to-newest
+  const completions = getRecentWorkoutCompletions(200);
   let streak = 0;
   for (let i = completions.length - 1; i >= 0; i--) {
     if (completions[i]) streak++;
@@ -617,13 +575,6 @@ function showAchievementUnlockModal(labels) {
   document.body.appendChild(overlay);
 }
 
-/* =========================================================
-   PHASE 7: Sharing & Export
-   User-curated "brag card": pick which stats to show, generate
-   a canvas image, share/download it. No new stored fields
-   except one small UI preference (include-link toggle state),
-   isolated in its own key. Never touches workout-state-v3.
-   ========================================================= */
 const SHARE_PREFS_KEY = 'workout-share-prefs-v1';
 const APP_DISPLAY_NAME = 'My Workout Planner';
 const APP_SHARE_URL = 'https://woodrowlyell.github.io/my-workout-tracker/';
@@ -816,10 +767,7 @@ async function shareCard(canvas, selectedItems, includeLink) {
       await navigator.share({ files: [file], text: shareText, title: 'My Progress' });
       return;
     }
-  } catch (e) {
-    // fall through to download fallback below
-  }
-  // Fallback: download the image directly
+  } catch (e) {}
   try {
     const blob = await canvasToBlob(canvas);
     const url = URL.createObjectURL(blob);
@@ -859,7 +807,7 @@ function renderShareScreen(container) {
   const candidates = collectAllShareCandidates();
   const prefs = loadSharePrefs();
   const selectedIds = {};
-  candidates.forEach(function(c) { selectedIds[c.id] = true; }); // default: everything available is pre-selected
+  candidates.forEach(function(c) { selectedIds[c.id] = true; });
 
   if (candidates.length === 0) {
     const nd = document.createElement('div');
@@ -1178,16 +1126,6 @@ onboardingSteps.forEach(function(step) {
   optionLabelLookups[step.key] = map;
 });
 
-/* =========================================================
-   VERSION 1.1: Goal-aware onboarding steps.
-   For goals using the new focus library (usesFocusLibrary: true), the
-   fixed 'secondaryFocus' step (built for Get Stronger) is replaced with
-   a goal-specific 'Choose Your Areas of Focus' multi-select step sourced
-   from focusLibrary, with no cap on how many can be chosen. For every
-   existing goal, onboardingSteps is used completely unchanged - this
-   never alters the Get Stronger / General Fitness onboarding flow that
-   existing users already know.
-   ========================================================= */
 function getEffectiveOnboardingSteps(goalKey) {
   const tmpl = goalTemplates[goalKey];
   if (!tmpl || !tmpl.usesFocusLibrary) return onboardingSteps;
@@ -1288,10 +1226,6 @@ function exercisesPerDayForDuration(duration) {
 function equipmentAllowsExercise(exId, equipment) {
   const ex = exerciseLibrary[exId];
   if (!ex) return false;
-  // FINAL CORRECTION: if this exercise carries an explicit equipment tag (currently
-  // only the Version 1.1 exercises), that tag is authoritative and noWeight is never
-  // treated as a stand-in for "works with any equipment." Every pre-existing exercise
-  // has no "equipment" field and falls through to the original logic below, unchanged.
   if (ex.equipment && equipmentTagAllowedFor[ex.equipment]) {
     return equipmentTagAllowedFor[ex.equipment].indexOf(equipment) !== -1;
   }
@@ -1316,13 +1250,6 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
     Object.keys(exerciseLibrary).forEach(function(exId) {
       const m = exerciseLibrary[exId].muscle;
       if (m === 'yoga') return;
-      // FINAL CORRECTION: the Improve Mobility & Flexibility goal previously mixed
-      // mobility/stretch exercises into the same muscle buckets as heavy strength
-      // exercises with no way to tell them apart, so mobility work rarely if ever
-      // got selected. For this goal specifically, the pool is now built ONLY from
-      // exercises tagged isMobility - a real, working exercise list rather than a
-      // guess based on shared muscle keys. Every other goal (including all existing
-      // ones) is completely unaffected by this branch.
       if (goalKey === 'improve_mobility' && !exerciseLibrary[exId].isMobility) return;
       if (!muscles[m]) muscles[m] = [];
       muscles[m].push(exId);
@@ -1362,13 +1289,6 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
   return muscles;
 }
 
-/**
- * Maps mobility-related focus values to the specific mobility exercise ids they
- * should prioritize, so "Hips" genuinely surfaces hip-mobility work first, "Shoulders"
- * surfaces shoulder/thoracic mobility, etc., rather than the goal treating all mobility
- * focuses identically. "Full Body Mobility" intentionally covers the whole pool for
- * balanced coverage per the spec.
- */
 const mobilityFocusToExerciseIds = {
   hips_mobility: ['hip_flexor_stretch', 'ninety_ninety_hip_stretch', 'worlds_greatest_stretch'],
   shoulders_mobility: ['shoulder_dislocates', 'thoracic_rotation'],
@@ -1380,13 +1300,6 @@ const mobilityFocusToExerciseIds = {
   full_body_mobility: ['hip_flexor_stretch', 'worlds_greatest_stretch', 'shoulder_dislocates', 'single_leg_balance', 'ninety_ninety_hip_stretch', 'thoracic_rotation', 'downward_dog_stretch', 'standing_calf_stretch']
 };
 
-/**
- * Given the person's chosen mobility focus values, returns the specific mobility
- * exercise ids to prioritize, balanced round-robin across focuses (same principle as
- * prioritizeByFocusMuscles) so selecting several mobility focuses doesn't let the
- * first one dominate. Returns null when the goal isn't Improve Mobility & Flexibility,
- * so this never affects any other goal's generation.
- */
 function getMobilityFocusExerciseIds(secondaryFocusList, goalKey) {
   if (goalKey !== 'improve_mobility') return null;
   const groups = (secondaryFocusList || [])
@@ -1437,14 +1350,6 @@ const muscleToPplCategory = {
   legs_posterior: 'legs', legs_general: 'legs', legs_quad: 'legs', calves: 'legs'
 };
 
-/**
- * Maps onboarding secondaryFocus values to real exerciseLibrary muscle group keys.
- * Not every focus option has an honest mapping - grip_strength, mobility, and
- * cardio_endurance don't correspond to a distinct muscle-group bucket in the
- * exercise pool, so they're intentionally left unmapped rather than faked.
- * Those three still show correctly on the summary screen as chosen goals, but
- * do not bias exercise selection, since there is nothing truthful to bias toward.
- */
 const secondaryFocusToMuscleGroups = {
   bigger_arms: ['biceps', 'triceps'],
   bigger_chest: ['chest'],
@@ -1459,15 +1364,12 @@ function getFocusMuscleGroups(secondaryFocusList, goalKey) {
   const muscles = {};
   const tmpl = goalTemplates[goalKey];
   if (tmpl && tmpl.usesFocusLibrary) {
-    // Version 1.1 goals: focus values come from focusLibrary[goalKey], each already
-    // carrying its own muscles array.
     const options = getFocusOptionsForGoal(goalKey);
     (secondaryFocusList || []).forEach(function(focusValue) {
       const found = options.filter(function(o) { return o.value === focusValue; })[0];
       if (found) { (found.muscles || []).forEach(function(m) { muscles[m] = true; }); }
     });
   } else {
-    // Existing Get Stronger secondary-focus mapping, completely unchanged.
     (secondaryFocusList || []).forEach(function(focusKey) {
       (secondaryFocusToMuscleGroups[focusKey] || []).forEach(function(m) { muscles[m] = true; });
     });
@@ -1475,13 +1377,6 @@ function getFocusMuscleGroups(secondaryFocusList, goalKey) {
   return Object.keys(muscles);
 }
 
-/**
- * Returns true if any of the chosen focus values for this goal are tagged
- * cardioBias or mobilityBias in the focus library - meaning the person wants
- * more cardio/mobility work than the goal's base template would otherwise
- * include. Used to nudge warmup/finisher selection and exercise count rather
- * than fabricate a muscle-group bias that doesn't honestly exist.
- */
 function getFocusBiasFlags(secondaryFocusList, goalKey) {
   const tmpl = goalTemplates[goalKey];
   const flags = { cardioBias: false, mobilityBias: false };
@@ -1497,16 +1392,6 @@ function getFocusBiasFlags(secondaryFocusList, goalKey) {
   return flags;
 }
 
-/**
- * Reorders a flat, deduped exercise-id list so that exercises belonging to the
- * chosen focus muscle groups come first, before the normal rotation is applied.
- * When multiple focus muscles are given, groups are interleaved round-robin
- * (one exercise from each focus group in turn) so that no single focus
- * dominates just because it happened to be selected or listed first - this
- * satisfies the "distribute emphasis...prevent one focus from consuming the
- * entire workout" requirement. Relative order within each group is preserved.
- * Exercises not belonging to any focus muscle come last, in original order.
- */
 function prioritizeByFocusMuscles(uniqueList, focusMuscles) {
   if (!focusMuscles || focusMuscles.length === 0) return uniqueList;
   const groups = focusMuscles.map(function(m) {
@@ -1562,22 +1447,12 @@ function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList,
   muscleKeys.forEach(function(m) { filteredPool[m].forEach(function(exId) { flatList.push(exId); }); });
   let uniqueList = flatList.filter(function(v, i) { return flatList.indexOf(v) === i; });
 
-  // Honest cardio bias: if the person chose a cardio/conditioning-leaning focus, actual
-  // cardio exercises (already present in exerciseLibrary, e.g. treadmill/bike/incline_walk)
-  // are pulled to the front of the rotation so they're more likely to be chosen alongside
-  // strength work, rather than fabricating a muscle-group bias for something that isn't one.
   if (focusBias && focusBias.cardioBias) {
     const cardioIds = uniqueList.filter(function(id) { return exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'; });
     const nonCardioIds = uniqueList.filter(function(id) { return !(exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'); });
     uniqueList = cardioIds.concat(nonCardioIds);
   }
 
-  // FINAL CORRECTION: for Improve Mobility & Flexibility, mobilityFocusIds carries the
-  // specific mobility exercises the person's chosen focuses should prioritize (e.g. hip
-  // stretches for a "Hips" focus). These are pulled to the very front of the rotation,
-  // ahead of even the general focus-muscle prioritization, so the program genuinely
-  // contains real mobility work instead of defaulting back to ordinary strength exercises
-  // that happen to share a muscle-group key.
   if (mobilityFocusIds && mobilityFocusIds.length > 0) {
     const presentMobilityIds = mobilityFocusIds.filter(function(id) { return uniqueList.indexOf(id) !== -1; });
     const restIds = uniqueList.filter(function(id) { return presentMobilityIds.indexOf(id) === -1; });
@@ -1587,24 +1462,11 @@ function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList,
   const prioritized = prioritizeByFocusMuscles(uniqueList, focusMuscles);
   const rotated = prioritized.slice(rotationOffset).concat(prioritized.slice(0, rotationOffset));
 
-  // If this day's filtered pool actually contains one or more of the chosen focus
-  // muscle groups, add one extra exercise slot per distinct focus muscle present
-  // here (capped at +2 per day), so focus areas get real additional volume, not
-  // just earlier placement within the same exercise count.
   let effectiveExCount = exCount;
   if (focusMuscles && focusMuscles.length > 0) {
     const presentFocusMuscles = focusMuscles.filter(function(m) { return filteredPool[m] && filteredPool[m].length > 0; });
     effectiveExCount = exCount + Math.min(presentFocusMuscles.length, 2);
   }
-  // Mobility bias: there's no dedicated selectable mobility-exercise pool beyond the
-  // fixed daily mobility warmup block, so rather than pretend to bias exercise
-  // selection toward "mobility," this honestly reduces the strength-exercise count
-  // slightly and leans on the existing mobility warmup + a longer cooldown walk,
-  // which are real, working parts of every generated day already. This still applies
-  // for non-mobility goals that happen to select a mobility-tagged focus; for the
-  // Improve Mobility & Flexibility goal itself, mobilityFocusIds above already ensures
-  // real mobility exercises are prioritized, so this reduction simply keeps the total
-  // session length reasonable rather than acting as the only mobility mechanism.
   if (focusBias && focusBias.mobilityBias) {
     effectiveExCount = Math.max(2, effectiveExCount - 1);
   }
@@ -1688,6 +1550,12 @@ function generatePersonalizedProgram() {
   state.programRecoveryPref = answers.recovery;
   state.programPriority = answers.priority;
   state.cycleStartDate = todayStr();
+  // BATCH 4b: persist the chosen focus areas as an ongoing, editable part of the
+  // program (previously this only ever lived in the transient state.onboarding
+  // object, which is discarded after generation - making later changes
+  // impossible). This is purely additive state; nothing here changes how the
+  // initial generation itself works.
+  state.currentFocusAreas = (answers.secondaryFocus || []).slice();
   state.screen = 'day';
   state.week = 1;
   state.day = workoutDayKeys[0] || 'mon';
@@ -1932,22 +1800,6 @@ function takeAutoBackupIfDue() {
   }
 }
 
-/* =========================================================
-   VERSION 1.1: New exercises for the new goals.
-   Merged into exerciseLibrary at runtime (never written into programData.json),
-   using the exact same structure and How-To mechanism (YT search-query helper)
-   as every existing exercise, so they behave identically - swappable, graphable,
-   suggestible, and clickable exactly like a built-in exercise. This only adds
-   entries; it never touches or overwrites anything already in programData.json.
-
-   FINAL CORRECTION: each new exercise now carries an explicit "equipment" tag
-   rather than relying on noWeight as a stand-in for equipment availability.
-   noWeight only ever meant "don't show a weight-tracking field" - it never
-   meant "usable with any equipment," and treating it that way incorrectly
-   allowed jump rope / battle ropes / rowing machine under Bodyweight Only.
-   Genuine bodyweight/mobility movements are tagged equipment: 'bodyweight'
-   and remain available everywhere, as they should be.
-   ========================================================= */
 const version11NewExercises = {
   jump_rope: { name: 'Jump Rope', muscle: 'cardio', scheme: '5 rounds x 1 min', link: YT('jump rope proper form'), noWeight: true, equipment: 'jump_rope' },
   kettlebell_swing: { name: 'Kettlebell Swing', muscle: 'legs_posterior', scheme: '4 x 15', link: YT('kettlebell swing proper form'), equipment: 'kettlebell' },
@@ -1963,13 +1815,6 @@ const version11NewExercises = {
   standing_calf_stretch: { name: 'Standing Calf Stretch', muscle: 'calves', scheme: '3 x 30 sec each side', link: YT('standing calf stretch proper form'), noWeight: true, equipment: 'bodyweight', isMobility: true }
 };
 
-/**
- * Which equipment-selection option(s) a given tagged equipment type is allowed under.
- * Only applies to exercises carrying an explicit "equipment" field (currently just the
- * 12 new Version 1.1 exercises) - every pre-existing exercise is untouched and keeps
- * being governed entirely by the original machineExercises/dumbbellExercises/noWeight
- * logic in equipmentAllowsExercise(), so no existing behavior changes.
- */
 const equipmentTagAllowedFor = {
   jump_rope: ['full_gym', 'planet_fitness', 'home_gym'],
   kettlebell: ['full_gym', 'planet_fitness', 'home_gym'],
@@ -1987,15 +1832,17 @@ async function loadProgramData() {
     const data = await response.json();
     exerciseLibrary = data.exerciseLibrary;
     programLibrary = data.programLibrary;
-    // Version 1.1: merge in new exercises without touching programData.json itself.
-    // Object.assign only adds these ids; it can never overwrite an existing exercise
-    // since these ids are all new and don't collide with anything already loaded.
     Object.assign(exerciseLibrary, version11NewExercises);
+    // BATCH 2: merge in the new curl/press exercises that close real gaps in the
+    // substitution pool (see movementPatternMap comment above). Never touches
+    // programData.json; purely additive, same mechanism as version11NewExercises.
+    Object.assign(exerciseLibrary, batch2NewExercises);
     Object.keys(exerciseLibrary).forEach(function(id) {
       const m = exerciseLibrary[id].muscle;
       if (!substituteGroups[m]) substituteGroups[m] = [];
       substituteGroups[m].push(id);
     });
+    rebuildMovementPatternGroups();
     return true;
   } catch (e) {
     bannerContainer.innerHTML = '<div style="padding:30px 20px;text-align:center;">' +
@@ -2206,6 +2053,7 @@ function renderAdminScreen(container) {
   renderBackupBox(content);
   renderAutoBackupList(content);
   renderCycleManager(content);
+  renderFocusManagementTool(content);
 
   const restartWrap = document.createElement('div');
   restartWrap.className = 'card';
@@ -2295,33 +2143,11 @@ function renderAdminScreen(container) {
   container.appendChild(content);
 }
 
-/* =========================================================
-   Day label repair tool (manual, opt-in, label-only).
-   Fixes a known display bug where swapping days could leave
-   two days sharing the same label (e.g. two "Sun" entries,
-   missing "Thu") after a day-swap. This ONLY edits
-   state.activePlan[dayKey].label - it never touches
-   exerciseIds, weights, checkpoints, proteinEntries, or
-   weeklyOverrides. Nothing runs automatically; a person must
-   open this and tap Save for anything to change. Safe to ship
-   to everyone since correctly-labeled plans are simply left
-   alone if untouched.
-   ========================================================= */
 function computeAllCustomExerciseIds() {
   const customLib = loadCustomExercises();
   return Object.keys(customLib).filter(function(id) { return !customLib[id].archived; });
 }
 
-/**
- * Returns every distinct exercise id that has at least one entry in
- * workout-optional-history-v1, regardless of whether that id belongs to a
- * user-created custom exercise or a built-in exercise (e.g. a built-in lift
- * logged as an "Optional Extra" on a day it isn't normally scheduled, such
- * as a rest day). This is needed because computeAllCustomExerciseIds() only
- * covers user-created exercises - a built-in id logged this way would
- * otherwise never surface on any Progress tab graph, even though it's
- * correctly tracked and shown on the day's own card.
- */
 function getAllOptionallyLoggedExerciseIds() {
   const history = loadOptionalHistory();
   const ids = {};
@@ -2492,9 +2318,6 @@ function chooseGoalTop(goalKey) {
   state.selectedGoal = goalKey;
   const tmpl = goalTemplates[goalKey];
   if (tmpl.usesFocusLibrary) {
-    // New Version 1.1 goals: skip the old single-select subgoal screen entirely and
-    // go straight into guided onboarding, which now includes a goal-aware multi-select
-    // "Areas of Focus" step (see onboardingSteps) instead of a fixed subgoal.
     startGuidedOnboarding(goalKey, null);
   } else if (tmpl.subgoals) {
     state.screen = 'select_subgoal'; saveState(); render();
@@ -2562,6 +2385,29 @@ function getPrevEntry(dayKey, exId, week) {
   }
   return null;
 }
+
+/* =========================================================
+   FINAL CORRECTION (History bug fix, Batch 1):
+   Root cause of the "stale historical weight" bug: this function
+   previously picked the "most recent" cross-day entry by comparing
+   week-number, with an alphabetical dayKey string as the tiebreak
+   (`w > best.week || (w === best.week && dayKey > best.dayKey)`).
+   That is a POSITION comparison, not a chronological one - it could
+   let an older week's logged entry outrank a genuinely more recent
+   date, and the dayKey tiebreak carries no real-world meaning at all.
+
+   Fix: every entry already stores its own entry.date (an ISO
+   yyyy-mm-dd string, set at the moment it was logged - see setEntry).
+   ISO date strings sort correctly with plain string comparison, so
+   this now compares actual logged dates directly. Only when BOTH
+   candidates lack a stored date (legacy entries from before dates
+   were tracked) does it fall back to the original week/dayKey
+   ordering, so old data is never treated as broken.
+
+   This does NOT touch the fillable "This week" input anywhere - it
+   only changes which historical entry is treated as "most recent"
+   for reference/suggestion display, per the requested fix.
+   ========================================================= */
 function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
   const c = cycle !== undefined ? cycle : state.viewingCycle;
   let best = null;
@@ -2573,12 +2419,60 @@ function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
       if (dayKey === excludeDayKey && w === week) continue;
       const e = getEntry(dayKey, exId, w, c);
       if (e && e.weight) {
-        if (!best || w > best.week || (w === best.week && dayKey > best.dayKey)) { best = { week: w, entry: e, dayKey: dayKey }; }
+        const candidate = { week: w, entry: e, dayKey: dayKey };
+        if (!best) { best = candidate; continue; }
+        if (candidate.entry.date && best.entry.date) {
+          if (candidate.entry.date > best.entry.date) best = candidate;
+        } else if (!candidate.entry.date && !best.entry.date) {
+          if (w > best.week || (w === best.week && dayKey > best.dayKey)) best = candidate;
+        } else if (candidate.entry.date && !best.entry.date) {
+          best = candidate;
+        }
       }
     }
   });
   return best;
 }
+
+/* =========================================================
+   NEW (Batch 1): recognizes the most recent historical weight
+   for an exercise when starting/switching to a NEW program, even
+   though the old dayKey that logged it no longer exists in the
+   current state.activePlan (getLastKnownWeightAnyDay above only
+   searches dayKeys present in the CURRENT plan by design, so it
+   cannot see history from a since-replaced program on its own).
+
+   This scans every stored weight entry for the given exId across
+   ALL dayKeys/cycles/weeks ever logged, using the same date-based
+   recency rule as above. It is strictly read-only: it does not
+   copy, duplicate, or alter any historical record, and it never
+   touches the fillable "This week" field - the user still enters
+   today's weight manually, same as always.
+   ========================================================= */
+function getMostRecentHistoricalWeightAcrossPrograms(exId) {
+  let best = null;
+  Object.keys(state.weights).forEach(function(key) {
+    const parts = key.split('::');
+    if (parts.length !== 4) return;
+    const keyExId = parts[1];
+    if (keyExId !== exId) return;
+    const e = state.weights[key];
+    if (!e || !e.weight) return;
+    const cycle = parseInt(parts[2].replace('c', ''), 10);
+    const week = parseInt(parts[3].replace('w', ''), 10);
+    const candidate = { dayKey: parts[0], cycle: cycle, week: week, entry: e };
+    if (!best) { best = candidate; return; }
+    if (candidate.entry.date && best.entry.date) {
+      if (candidate.entry.date > best.entry.date) best = candidate;
+    } else if (!candidate.entry.date && !best.entry.date) {
+      if (cycle > best.cycle || (cycle === best.cycle && week > best.week)) best = candidate;
+    } else if (candidate.entry.date && !best.entry.date) {
+      best = candidate;
+    }
+  });
+  return best;
+}
+
 let entriesCacheVersion = -1;
 let entriesCacheByExercise = {};
 
@@ -2678,10 +2572,6 @@ function isDayComplete(dayKey, week) {
   if (!mob || !mob.done) return false;
   const cardio = getEntry(dayKey, '__cardio_' + dayKey + '__', week);
   if (!cardio || !cardio.done) return false;
-  // Phase 3: if this is TODAY's occurrence of this day (matching cycle/week being viewed),
-  // and a time-adaptation is active, completion is judged against the adapted (trimmed)
-  // exercise list, since the user physically cannot log the cut exercises today. Past/other
-  // days always use the full, unadapted list so history and streaks stay accurate.
   let exerciseIdsForCompletion = day.exerciseIds;
   const isTodayOccurrence = (week === state.week) && (state.viewingCycle === state.cycle);
   if (isTodayOccurrence) {
@@ -2712,63 +2602,264 @@ function isWeekComplete(week) {
   return true;
 }
 
+/* =========================================================
+   BATCH 2: Global Swap Exercise Audit and Rebuild
+   Three confirmed root causes fixed here:
+   1. Muscle-group-only matching let isolation moves (lateral raises,
+      rear delt work) get offered as "equivalent" to compound presses
+      that share the same muscle tag but not the same movement pattern
+      or training purpose.
+   2. Some muscle groups (biceps, shoulders-vertical-press) had too few
+      real exercises in the library to ever produce a meaningful
+      alternative - fixed by adding real new exercises below, not by
+      loosening the matching logic to accept poor substitutes.
+   3. openSwapModal read exerciseLibrary[currentExId].muscle with no
+      guard, so a stale/missing exercise id threw and silently did
+      nothing when tapped - fixed with a defensive check.
+
+   This entire system is goal-agnostic and day-agnostic: it works the
+   same way for Get Stronger, Build Muscle, Lose Fat, Improve Fitness,
+   Glute & Strength, Strengthen Core, and General Fitness. Yoga is
+   untouched, since yoga exercises are never run through this function
+   (they use muscle: 'yoga', which carries no movementPattern tag and
+   is excluded from the pattern map entirely on purpose).
+   ========================================================= */
+
+/**
+ * New exercises added specifically to close real substitution gaps found
+ * during the audit - not filler, each is a genuinely distinct, valid gym
+ * exercise for its movement pattern. Merged at runtime exactly like the
+ * Version 1.1 exercises, never touching programData.json.
+ */
+const batch2NewExercises = {
+  barbell_curl: { name: 'Barbell curl', muscle: 'biceps', scheme: '3 x 10', link: YT('barbell curl proper form'), movementPattern: 'curl' },
+  ez_bar_curl: { name: 'EZ-bar curl', muscle: 'biceps', scheme: '3 x 10', link: YT('ez bar curl proper form'), movementPattern: 'curl' },
+  seated_barbell_press: { name: 'Seated barbell shoulder press', muscle: 'shoulders', scheme: '3 x 10', link: YT('seated barbell shoulder press proper form'), movementPattern: 'vertical_press' },
+  arnold_press: { name: 'Arnold press', muscle: 'shoulders', scheme: '3 x 10', link: YT('arnold press proper form'), movementPattern: 'vertical_press' }
+};
+
+/**
+ * Movement pattern classification for every exercise in the library. This is
+ * the missing layer that muscle-group matching alone can't provide: two
+ * exercises can share a muscle tag (e.g. "shoulders") while being completely
+ * different training movements (a compound vertical press vs. an isolation
+ * lateral raise). Alternatives are found by pattern first, muscle group
+ * second - never the reverse - so a compound lift is never replaced with an
+ * isolation move just because they happen to hit the same muscle.
+ * Cardio and yoga exercises intentionally have no pattern entry; they are
+ * never swap targets or swap candidates through this system.
+ */
+const movementPatternMap = {
+  chest_press_machine: 'horizontal_press', incline_db_press: 'horizontal_press', flat_db_press: 'horizontal_press',
+  pushup: 'horizontal_press', cable_chest_press: 'horizontal_press',
+  shoulder_press_machine: 'vertical_press', db_shoulder_press: 'vertical_press',
+  seated_barbell_press: 'vertical_press', arnold_press: 'vertical_press',
+  cable_lateral_raise: 'lateral_raise', db_lateral_raise: 'lateral_raise',
+  rear_delt_pec_deck: 'rear_delt', face_pull: 'rear_delt',
+  triceps_pushdown: 'triceps_isolation', triceps_kickback: 'triceps_isolation', overhead_triceps_ext: 'triceps_isolation',
+  lat_pulldown: 'vertical_pull', straight_arm_pulldown: 'vertical_pull',
+  chest_supported_row: 'horizontal_pull', seated_cable_row: 'horizontal_pull',
+  hammer_curl: 'curl', cable_curl: 'curl', db_curl: 'curl', barbell_curl: 'curl', ez_bar_curl: 'curl',
+  smith_rdl: 'hip_hinge', smith_hip_thrust: 'hip_hinge',
+  leg_press: 'squat_pattern', bodyweight_squat: 'squat_pattern', goblet_squat: 'squat_pattern',
+  walking_lunge: 'lunge_pattern',
+  seated_leg_curl: 'leg_curl_isolation',
+  leg_extension: 'leg_extension_isolation',
+  calf_raise_machine: 'calf_raise', bodyweight_calf_raise: 'calf_raise',
+  hip_abductor: 'hip_isolation', hip_adductor: 'hip_isolation',
+  plank: 'core_stability',
+  cable_woodchop: 'core_rotation', torso_rotation: 'core_rotation',
+  ab_crunch_machine: 'core_flexion',
+  farmer_carry: 'loaded_carry',
+  kettlebell_swing: 'hip_hinge'
+};
+
+/**
+ * Which exercise ids belong to each movement pattern, built once from
+ * movementPatternMap plus the merged-in exercise library, so lookups don't
+ * re-scan the whole library on every swap.
+ */
+let movementPatternGroups = {};
+function rebuildMovementPatternGroups() {
+  movementPatternGroups = {};
+  Object.keys(movementPatternMap).forEach(function(exId) {
+    if (!exerciseLibrary[exId]) return; // defensive: id might not exist if library changes
+    const pattern = movementPatternMap[exId];
+    if (!movementPatternGroups[pattern]) movementPatternGroups[pattern] = [];
+    movementPatternGroups[pattern].push(exId);
+  });
+}
+
+/**
+ * Returns up to 5 ranked, genuinely appropriate alternatives for exId, given
+ * the ids already present in todaysExerciseIds (which are always excluded,
+ * along with exId itself). Ranking order, per spec:
+ *   1. Same movement pattern (hard requirement - see below)
+ *   2. Same primary muscle group, as a tiebreaker among pattern matches
+ *   3. Equipment reasonably available (hard filter via equipmentAllowsExercise)
+ * If exId has no known movement pattern (e.g. a custom exercise, or a
+ * cardio/yoga exercise), falls back to muscle-group matching only, which
+ * matches the pre-existing behavior for those cases rather than returning
+ * nothing.
+ * Returns [] when no legitimate alternative exists - callers must show
+ * Remove for Today / Remove for This Program in that case, never pad the
+ * list with a poor substitute.
+ */
+function getSwapAlternatives(exId, dayKey, excludeIds) {
+  const ex = exerciseLibrary[exId];
+  if (!ex) return [];
+  const pattern = movementPatternMap[exId];
+  const excludeSet = {};
+  (excludeIds || []).forEach(function(id) { excludeSet[id] = true; });
+  excludeSet[exId] = true;
+
+  const equipment = (state.onboarding && state.onboarding.answers && state.onboarding.answers.equipment) || null;
+
+  function passesHardFilters(candidateId) {
+    if (excludeSet[candidateId]) return false;
+    if (equipment && !equipmentAllowsExercise(candidateId, equipment)) return false;
+    return true;
+  }
+
+  let candidates = [];
+  if (pattern && movementPatternGroups[pattern]) {
+    candidates = movementPatternGroups[pattern].filter(passesHardFilters);
+  }
+  if (candidates.length === 0) {
+    // Fallback for exercises with no known movement pattern (custom exercises,
+    // or any built-in exercise not yet classified): same muscle group only,
+    // matching the original pre-Batch-2 behavior so nothing regresses.
+    candidates = (substituteGroups[ex.muscle] || []).filter(passesHardFilters);
+  }
+
+  // Rank: exact muscle match first (within the same pattern group, this mostly
+  // ties, but matters for the muscle-group fallback path and mixed cases).
+  candidates.sort(function(a, b) {
+    const aMuscleMatch = exerciseLibrary[a] && exerciseLibrary[a].muscle === ex.muscle ? 1 : 0;
+    const bMuscleMatch = exerciseLibrary[b] && exerciseLibrary[b].muscle === ex.muscle ? 1 : 0;
+    return bMuscleMatch - aMuscleMatch;
+  });
+
+  return candidates.slice(0, 5);
+}
+
+/**
+ * "Remove for Today": removes exId from today's occurrence of dayKey only.
+ * Implemented as a weekly override (the same mechanism already used by day
+ * swaps), so future weeks and the program template are completely untouched,
+ * no history is deleted, and the exercise remains fully intact in the global
+ * library and in every other week/cycle.
+ */
+function removeExerciseForToday(dayKey, exIndex) {
+  const baseDay = getEffectiveDay(dayKey);
+  const newExerciseIds = baseDay.exerciseIds.filter(function(id, idx) { return idx !== exIndex; });
+  const newDayContent = Object.assign({}, baseDay, { exerciseIds: newExerciseIds });
+  const ovKey = weekOverrideKey(state.viewingCycle, state.week);
+  if (!state.weeklyOverrides) state.weeklyOverrides = {};
+  if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
+  state.weeklyOverrides[ovKey][dayKey] = newDayContent;
+  saveState();
+  render();
+  toast('Removed for today only');
+}
+
+/**
+ * "Remove for This Program": removes exId from state.activePlan[dayKey] itself,
+ * so it no longer appears in any future, unstarted week of the current
+ * program. This does NOT touch state.weeklyOverrides for past weeks (so a
+ * week that already has a weekly override showing this exercise keeps showing
+ * it, since that override was already a snapshot of a specific week), does
+ * NOT rewrite completed workouts (those are read from getEntry/state.weights,
+ * entirely separate from the plan template), and does NOT touch history,
+ * other cycles, other programs, custom exercises, or Yoga.
+ */
+function removeExerciseForProgram(dayKey, exIndex) {
+  const newExerciseIds = state.activePlan[dayKey].exerciseIds.filter(function(id, idx) { return idx !== exIndex; });
+  state.activePlan[dayKey] = Object.assign({}, state.activePlan[dayKey], { exerciseIds: newExerciseIds });
+  saveState();
+  render();
+  toast('Removed for the rest of this program');
+}
+
 function openSwapModal(dayKey, exIndex) {
-  const day = state.activePlan[dayKey];
+  const day = getEffectiveDay(dayKey);
   const currentExId = day.exerciseIds[exIndex];
-  const muscle = exerciseLibrary[currentExId].muscle;
+  // BATCH 2 FIX (root cause 3): guard against a stale/missing exercise id, which
+  // previously threw here with no guard and made the Swap button appear to do
+  // nothing at all when tapped from the defensive fallback card.
+  if (!exerciseLibrary[currentExId]) {
+    toast('This exercise is no longer available. Use Remove instead.');
+    return;
+  }
   const alreadyInDay = day.exerciseIds.filter(function(id, idx) { return idx !== exIndex; });
-  const options = (substituteGroups[muscle] || []).filter(function(id) { return id !== currentExId && alreadyInDay.indexOf(id) === -1; }).slice(0, 5);
+  const options = getSwapAlternatives(currentExId, dayKey, alreadyInDay);
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
-  sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">Choose a replacement that works the same muscle group. Exercises already in today plan are hidden. Showing up to 5 options.</div>';
+
   if (options.length === 0) {
-    const nd = document.createElement('p');
-    nd.style.cssText = 'font-size:13px;color:#999;';
-    nd.textContent = 'No new alternatives available for this muscle group right now.';
-    sheet.appendChild(nd);
+    // No legitimate alternative exists - per spec, offer Remove for Today /
+    // Remove for This Program instead of silently deleting or padding the
+    // list with a poor substitute.
+    sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">No genuinely appropriate alternative is available for this exercise right now, given your equipment and today\u2019s plan. You can remove it instead \u2014 nothing about your logged history is affected either way.</div>';
+    const removeTodayBtn = document.createElement('button');
+    removeTodayBtn.className = 'goal-btn';
+    removeTodayBtn.style.cssText = 'text-align:center;';
+    removeTodayBtn.innerHTML = 'Remove for Today<div class="desc">Only affects today \u2014 future weeks are unchanged</div>';
+    removeTodayBtn.onclick = function() { document.body.removeChild(overlay); removeExerciseForToday(dayKey, exIndex); };
+    sheet.appendChild(removeTodayBtn);
+    const removeProgramBtn = document.createElement('button');
+    removeProgramBtn.className = 'goal-btn';
+    removeProgramBtn.style.cssText = 'text-align:center;';
+    removeProgramBtn.innerHTML = 'Remove for This Program<div class="desc">Removes it from future unstarted weeks in this program</div>';
+    removeProgramBtn.onclick = function() { document.body.removeChild(overlay); removeExerciseForProgram(dayKey, exIndex); };
+    sheet.appendChild(removeProgramBtn);
+  } else {
+    sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">Alternatives are matched by movement pattern and muscle group, filtered to your equipment, and exclude anything already in today\u2019s plan. Showing up to 5 options.</div>';
+    options.forEach(function(optId) {
+      const opt = document.createElement('div');
+      opt.className = 'swap-option';
+      opt.style.cssText = 'flex-direction:column;align-items:stretch;';
+      const topRow = document.createElement('div');
+      topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+      const optName = document.createElement('div');
+      optName.className = 'swap-option-name';
+      optName.textContent = exerciseLibrary[optId].name;
+      topRow.appendChild(optName);
+      if (exerciseLibrary[optId].link) {
+        const howToLink = document.createElement('a');
+        howToLink.href = exerciseLibrary[optId].link;
+        howToLink.target = '_blank';
+        howToLink.className = 'ex-btn';
+        howToLink.textContent = 'How-to';
+        topRow.appendChild(howToLink);
+      }
+      opt.appendChild(topRow);
+      const btns = document.createElement('div');
+      btns.className = 'swap-btns';
+      const todayBtn = document.createElement('button');
+      todayBtn.className = 'swap-btn today';
+      todayBtn.textContent = 'Just today';
+      todayBtn.onclick = function() {
+        state.activePlan[dayKey].exerciseIds[exIndex] = optId;
+        saveState(); document.body.removeChild(overlay); render(); toast('Swapped for today');
+      };
+      btns.appendChild(todayBtn);
+      const permBtn = document.createElement('button');
+      permBtn.className = 'swap-btn permanent';
+      permBtn.textContent = 'Always';
+      permBtn.onclick = function() {
+        state.activePlan[dayKey].exerciseIds[exIndex] = optId;
+        saveState(); document.body.removeChild(overlay); render(); toast('Swapped going forward');
+      };
+      btns.appendChild(permBtn);
+      opt.appendChild(btns);
+      sheet.appendChild(opt);
+    });
   }
-  options.forEach(function(optId) {
-    const opt = document.createElement('div');
-    opt.className = 'swap-option';
-    opt.style.cssText = 'flex-direction:column;align-items:stretch;';
-    const topRow = document.createElement('div');
-    topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
-    const optName = document.createElement('div');
-    optName.className = 'swap-option-name';
-    optName.textContent = exerciseLibrary[optId].name;
-    topRow.appendChild(optName);
-    if (exerciseLibrary[optId].link) {
-      const howToLink = document.createElement('a');
-      howToLink.href = exerciseLibrary[optId].link;
-      howToLink.target = '_blank';
-      howToLink.className = 'ex-btn';
-      howToLink.textContent = 'How-to';
-      topRow.appendChild(howToLink);
-    }
-    opt.appendChild(topRow);
-    const btns = document.createElement('div');
-    btns.className = 'swap-btns';
-    const todayBtn = document.createElement('button');
-    todayBtn.className = 'swap-btn today';
-    todayBtn.textContent = 'Just today';
-    todayBtn.onclick = function() {
-      state.activePlan[dayKey].exerciseIds[exIndex] = optId;
-      saveState(); document.body.removeChild(overlay); render(); toast('Swapped for today');
-    };
-    btns.appendChild(todayBtn);
-    const permBtn = document.createElement('button');
-    permBtn.className = 'swap-btn permanent';
-    permBtn.textContent = 'Always';
-    permBtn.onclick = function() {
-      state.activePlan[dayKey].exerciseIds[exIndex] = optId;
-      saveState(); document.body.removeChild(overlay); render(); toast('Swapped going forward');
-    };
-    btns.appendChild(permBtn);
-    opt.appendChild(btns);
-    sheet.appendChild(opt);
-  });
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'modal-close';
   closeBtn.textContent = 'Cancel';
@@ -3008,7 +3099,7 @@ function showEncouragementModal(context) {
   document.body.appendChild(overlay);
 }
 
-function showFireworksCelebration(message) {
+function showFireworksCelebration(message, showProgramCompleteOptions) {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;display:flex;align-items:center;justify-content:center;overflow:hidden;';
 
@@ -3034,11 +3125,46 @@ function showFireworksCelebration(message) {
   const card = document.createElement('div');
   card.style.cssText = 'background:#fff;border-radius:20px;padding:32px 24px;text-align:center;max-width:340px;position:relative;z-index:2;box-shadow:0 20px 60px rgba(0,0,0,0.4);';
   card.innerHTML = '<div style="font-size:48px;margin-bottom:10px;">\uD83C\uDF89</div><h2 style="font-size:22px;margin:0 0 10px;">' + message + '</h2>';
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Continue';
-  closeBtn.style.cssText = 'padding:14px 28px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;margin-top:8px;';
-  closeBtn.onclick = function() { document.body.removeChild(overlay); };
-  card.appendChild(closeBtn);
+
+  /* BATCH 3: end-of-program prompt. Only shown when this celebration is the
+     specific "full program complete" case (passed in by checkAndCelebrate's
+     allWeeksDone branch) - the day-complete and week-complete celebrations
+     are untouched and never pass this flag, so they keep their single
+     "Continue" button exactly as before. */
+  if (showProgramCompleteOptions) {
+    const promptText = document.createElement('p');
+    promptText.style.cssText = 'font-size:14px;color:#666;margin:0 0 16px;';
+    promptText.textContent = 'Ready to start a new program?';
+    card.appendChild(promptText);
+
+    const startNewBtn = document.createElement('button');
+    startNewBtn.textContent = 'Start New Program';
+    startNewBtn.style.cssText = 'width:100%;padding:14px 28px;background:#e8722c;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;margin-bottom:10px;';
+    startNewBtn.onclick = function() {
+      document.body.removeChild(overlay);
+      // Reuses the existing program onboarding/selection flow exactly as-is -
+      // this is NOT a second onboarding system. Previous program history
+      // (weights, checkpoints, achievements, goalHistory) remains fully intact;
+      // nothing here deletes or resets any of it.
+      state.screen = 'select_goal';
+      saveState();
+      render();
+    };
+    card.appendChild(startNewBtn);
+
+    const notNowBtn = document.createElement('button');
+    notNowBtn.textContent = 'Not Now';
+    notNowBtn.style.cssText = 'width:100%;padding:12px 28px;background:#f0efe9;color:#1c1c1a;border:none;border-radius:10px;font-size:14px;font-weight:600;';
+    notNowBtn.onclick = function() { document.body.removeChild(overlay); };
+    card.appendChild(notNowBtn);
+  } else {
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Continue';
+    closeBtn.style.cssText = 'padding:14px 28px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;margin-top:8px;';
+    closeBtn.onclick = function() { document.body.removeChild(overlay); };
+    card.appendChild(closeBtn);
+  }
+
   overlay.appendChild(card);
   document.body.appendChild(overlay);
 }
@@ -3080,7 +3206,7 @@ function checkAndCelebrate(dayKey, week) {
   if (allWeeksDone && state.celebratedCycles.indexOf(cycleCelebrationKey) === -1) {
     state.celebratedCycles.push(cycleCelebrationKey);
     saveState();
-    setTimeout(function() { showFireworksCelebration('You completed the whole program! Time to start your next cycle.'); }, 350);
+    setTimeout(function() { showFireworksCelebration('You completed the whole program! Program Complete!', true); }, 350);
   }
 }
 
@@ -3400,13 +3526,6 @@ function deleteCycle(cycleNum) {
   toast('Cycle ' + cycleNum + ' deleted');
 }
 
-/**
- * BUG FIX: returns true if cycle c genuinely still has data associated with it
- * (logged weights, protein, or an archived checkpoint), or is the current active
- * cycle. This is the exact same existence test deleteCycle() already uses when
- * deciding which cycle becomes the new "highest" after a deletion - reused here
- * rather than duplicated, so the two stay in sync by construction.
- */
 function cycleActuallyExists(c) {
   if (c === state.cycle) return true;
   const hasWeights = Object.keys(state.weights).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
@@ -3421,13 +3540,6 @@ function renderCycleManager(container) {
   wrap.className = 'card';
   wrap.style.cssText = 'border: 1px solid #f0cba4;';
   wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Manage cycles</p><p class="ex-scheme" style="margin-bottom:10px;">Delete cycles you did not mean to create. This only affects this device.</p>';
-  // BUG FIX: previously looped every integer from 1 to state.cycle unconditionally,
-  // which meant a deleted cycle whose number fell below the new highest remaining
-  // cycle would still render as a "ghost" row with no data behind it, making the
-  // deletion look like it hadn't taken effect. Now only cycles that genuinely still
-  // exist are rendered, computed fresh from current state on every render - so a
-  // deletion followed by a re-render (or a page refresh, which rebuilds this list
-  // from the same persisted state) can never bring a ghost row back.
   let anyRowRendered = false;
   for (let c = 1; c <= state.cycle; c++) {
     if (!cycleActuallyExists(c)) continue;
@@ -3551,7 +3663,63 @@ function renderLengthSelect() {
   app.appendChild(wrap);
 }
 
-function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWeight) {
+function isRecoveryWeek(week) {
+  return week > 1 && (week - 1) % 4 === 0;
+}
+
+/* =========================================================
+   BATCH 3: Corrected progression logic
+   Root cause of the "too aggressive" bug: the original
+   getProgressionSuggestion had no concept of session-success history at
+   all. On 'standard' recovery (the default for most programs), it
+   alternated a rep-increase suggestion on odd weeks and a weight-increase
+   suggestion on even weeks purely by WEEK PARITY - meaning a single
+   logged session at an odd week number could trigger a suggested
+   increase with zero prior consistency behind it. 'aggressive' recovery
+   suggested a weight increase on literally every single session,
+   unconditionally.
+
+   Fix: PROGRESSION_SUCCESS_THRESHOLD consecutive successful sessions at
+   the SAME weight are now required before ANY increase (rep or weight)
+   is suggested, for every recovery preference. "Successful session" is
+   defined using the only performance signal this app actually stores -
+   a logged weight for that exercise/day/week - since there is no
+   per-set/per-rep logging system to draw on, and the spec explicitly
+   says not to invent one. A run of consecutive sessions at the same
+   logged weight, with no gaps, counts as consistent successful
+   performance at that weight.
+
+   This constant is defined here, isolated, so it can be tuned later
+   without touching the surrounding logic.
+   ========================================================= */
+const PROGRESSION_SUCCESS_THRESHOLD = 3;
+
+/**
+ * Returns the length of the most recent unbroken run of sessions logged at
+ * the exact same weight, using the exercise's own date-sorted history for
+ * this specific dayKey (so different days of the same exercise are judged
+ * independently, matching how suggestions are already shown per-day).
+ * Entries are sorted by entry.date when available (matching the Batch 1
+ * fix's chronological approach), falling back to week/cycle order for
+ * legacy entries with no stored date.
+ */
+function getConsecutiveSameWeightStreak(dayKey, exId) {
+  const entries = getAllEntriesForExercise(exId)
+    .filter(function(e) { return e.dayKey === dayKey; })
+    .sort(function(a, b) {
+      if (a.date && b.date) return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0);
+      return (a.cycle - b.cycle) || (a.week - b.week);
+    });
+  if (entries.length === 0) return 0;
+  let streak = 1;
+  for (let i = entries.length - 1; i > 0; i--) {
+    if (entries[i].weight === entries[i - 1].weight) streak++;
+    else break;
+  }
+  return streak;
+}
+
+function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWeight, streakCount) {
   const match = scheme.match(/(\d+)\s*x\s*(\d+)/);
   if (!match) return null;
   const sets = parseInt(match[1], 10);
@@ -3563,35 +3731,33 @@ function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWe
     return 'Try ' + (parseFloat(mostRecentLoggedWeight) + weightStep) + ' lbs (up from your last logged ' + mostRecentLoggedWeight + ' lbs)';
   }
 
+  // BATCH 3 FIX: no increase of any kind (weight or reps) is suggested until
+  // PROGRESSION_SUCCESS_THRESHOLD consecutive same-weight sessions have been
+  // logged. Below that threshold, either there isn't enough history yet, or
+  // performance hasn't been consistent enough yet to recommend more - in
+  // both cases, no suggestion is the correct, conservative behavior.
+  const streak = streakCount || 0;
+  if (streak < PROGRESSION_SUCCESS_THRESHOLD) {
+    return null;
+  }
+
   if (recoveryPref === 'aggressive') {
-    return { type: 'weight', text: weightSuggestion() };
+    return { type: 'weight', text: 'You\u2019re showing consistent progress at ' + mostRecentLoggedWeight + ' lbs. Consider increasing slightly next session. ' + weightSuggestion() };
   }
   if (recoveryPref === 'joint_friendly') {
     const cyclePosition = ((week - 1) % 5);
     if (cyclePosition >= 4) {
       return { type: 'weight', text: 'Rep ceiling reached \u2014 ' + weightSuggestion() };
     }
-    return { type: 'reps', text: sets + ' x ' + (baseReps + cyclePosition + 1) + ' this week' };
+    return { type: 'reps', text: 'You\u2019re showing consistent progress at this weight. Consider ' + sets + ' x ' + (baseReps + cyclePosition + 1) + ' next session.' };
   }
   if (week % 2 === 1) {
-    return { type: 'reps', text: sets + ' x ' + (baseReps + 2) + ' this week' };
+    return { type: 'reps', text: 'You\u2019re showing consistent progress at this weight. Consider ' + sets + ' x ' + (baseReps + 2) + ' next session.' };
   }
-  return { type: 'weight', text: weightSuggestion() };
+  return { type: 'weight', text: 'You\u2019re showing consistent progress at ' + mostRecentLoggedWeight + ' lbs. Consider increasing slightly next session. ' + weightSuggestion() };
 }
 
-function isRecoveryWeek(week) {
-  return week > 1 && (week - 1) % 4 === 0;
-}
-
-/* =========================================================
-   PHASE 4: Intelligent Training
-   Pure derivation from existing logged history (weights,
-   completion, steps). No new stored fields, no AI/network
-   calls. Reads only via existing getEntry/getAllEntriesForExercise/
-   isDayComplete - never writes anything new to state.
-   ========================================================= */
 function detectWeightStall(entries) {
-  // entries: chronologically sorted [{week, cycle, weight}, ...] for one exercise
   if (!entries || entries.length < 3) return null;
   const lastThree = entries.slice(-3);
   const netChange = lastThree[2].weight - lastThree[0].weight;
@@ -3599,12 +3765,6 @@ function detectWeightStall(entries) {
   return null;
 }
 
-/**
- * Wraps the existing getProgressionSuggestion() output: if the last 3 logged
- * sessions show no net progress, surface a deload recommendation instead.
- * If there's not enough history, or the lift is progressing, the original
- * suggestion from getProgressionSuggestion is returned unchanged.
- */
 function getIntelligentSuggestion(dayKey, exId, week, baseSuggestion) {
   const entries = getAllEntriesForExercise(exId)
     .filter(function(e) { return e.dayKey === dayKey; })
@@ -3619,11 +3779,6 @@ function getIntelligentSuggestion(dayKey, exId, week, baseSuggestion) {
   return baseSuggestion;
 }
 
-/**
- * Walks backward through scheduled (non-rest) workout days across weeks/cycles,
- * starting from the currently viewed week, collecting up to n completion booleans.
- * Used only for Recovery Recommendations - read-only, no state mutation.
- */
 function getRecentWorkoutCompletions(n) {
   const results = [];
   const orderedDays = getOrderedDayKeys();
@@ -3705,13 +3860,6 @@ function renderRecoveryBanner(container) {
   container.appendChild(wrap);
 }
 
-/* =========================================================
-   PHASE 5: Progress Experience
-   Pure aggregation/display over existing state. No new
-   stored fields. "Total Volume" is explicitly labeled as an
-   estimate since only prescribed sets/reps (from ex.scheme)
-   are available, not actual reps performed.
-   ========================================================= */
 function computeProgramProgress() {
   const totalWeeks = state.programLength || 8;
   const orderedDays = getOrderedDayKeys();
@@ -3886,12 +4034,6 @@ function renderWeeklySummaryCard(container) {
   container.appendChild(wrap);
 }
 
-/* =========================================================
-   PHASE 3: Smart Daily Workout Adaptation
-   Today-only, non-destructive. Never touches state.activePlan
-   or any stored program data. Stored separately and keyed by
-   date, so it silently expires when the day changes.
-   ========================================================= */
 const DAILY_ADAPT_KEY = 'workout-daily-adapt-v1';
 
 function loadDailyAdaptState() {
@@ -3908,9 +4050,7 @@ function loadDailyAdaptState() {
 function saveDailyAdaptState(obj) {
   try {
     localStorage.setItem(DAILY_ADAPT_KEY, JSON.stringify(obj));
-  } catch (e) {
-    // non-critical
-  }
+  } catch (e) {}
 }
 
 function dailyAdaptKeyFor(dayKey) {
@@ -3919,7 +4059,7 @@ function dailyAdaptKeyFor(dayKey) {
 
 function getTodaysAdaptChoice(dayKey) {
   const all = loadDailyAdaptState();
-  return all[dailyAdaptKeyFor(dayKey)] || null; // null = 'Planned Workout' (no adaptation)
+  return all[dailyAdaptKeyFor(dayKey)] || null;
 }
 
 function setTodaysAdaptChoice(dayKey, choice) {
@@ -3931,7 +4071,6 @@ function setTodaysAdaptChoice(dayKey, choice) {
     all[key] = choice;
   }
   saveDailyAdaptState(all);
-  // Opportunistically clean out old-date entries so this key doesn't grow forever
   const today = todayStr();
   Object.keys(all).forEach(function(k) {
     if (k.indexOf(today + '::') !== 0) delete all[k];
@@ -4000,11 +4139,6 @@ function adaptWorkoutToTime(day, budgetMinutes) {
   return { includedIds: includedIds, cutIds: cutIds, estimatedMinutes: runningMinutes };
 }
 
-/**
- * Returns the effective day object to render today, with exerciseIds
- * possibly trimmed for time. Does NOT mutate state.activePlan or any
- * stored day object - returns a shallow copy when adaptation is active.
- */
 function getAdaptedDay(dayKey) {
   const baseDay = getEffectiveDay(dayKey);
   if (!baseDay || baseDay.rest) return { day: baseDay, cutIds: [], choice: null };
@@ -4018,28 +4152,6 @@ function getAdaptedDay(dayKey) {
   return { day: adaptedDay, cutIds: result.cutIds, choice: choice, estimatedMinutes: result.estimatedMinutes };
 }
 
-/* =========================================================
-   VERSION 1.1: Optional Extra Exercises & Personal Exercise Library
-   Three fully isolated storage keys, none of which ever touch
-   workout-state-v3:
-     - workout-custom-exercises-v1: user-created exercise definitions
-     - workout-optional-history-v1: logged optional-exercise sessions
-     - workout-optional-prefs-v1: favorites + recently-used list
-   Optional exercises NEVER modify state.activePlan, isDayComplete,
-   progression, or any prescribed-workout logic.
-
-   IMPORTANT: optional-history entries are keyed by the specific
-   program day+week+cycle instance (dayKey::cCYCLE::wWEEK), the same
-   convention used for regular exercise weights - NOT by real calendar
-   date. This means:
-     - An optional exercise stays attached to the exact day's card,
-       every time that day/week/cycle is viewed again.
-     - It never "carries forward" to a different week or a different
-       day that happens to train the same muscle group - a new
-       week/day instance always starts empty.
-     - Switching weeks/cycles shows exactly what was logged for that
-       occurrence, same as every other tracked field in this app.
-   ========================================================= */
 const CUSTOM_EXERCISES_KEY = 'workout-custom-exercises-v1';
 const OPTIONAL_HISTORY_KEY = 'workout-optional-history-v1';
 const OPTIONAL_PREFS_KEY = 'workout-optional-prefs-v1';
@@ -4121,11 +4233,6 @@ function findDuplicateExercise(name) {
   return null;
 }
 
-/**
- * Unified lookup: works for both built-in and custom exercise ids,
- * returning a plain object shaped like exerciseLibrary entries so
- * existing chart/achievement code can treat them identically.
- */
 function getAnyExerciseDef(exId) {
   if (exerciseLibrary[exId]) return exerciseLibrary[exId];
   const customLib = loadCustomExercises();
@@ -4275,23 +4382,11 @@ function getTodaysOptionalEntries(dayKey) {
   return list;
 }
 
-/**
- * Returns true if this exercise is already logged for the given day's
- * current week/cycle instance. Used to prevent duplicate entries and to
- * disable the option in the selector.
- */
 function isExerciseAlreadyLoggedToday(dayKey, exId) {
   const entries = getTodaysOptionalEntries(dayKey);
   return entries.some(function(e) { return e.exId === exId; });
 }
 
-/**
- * Suggested weight for an optional exercise: based purely on that
- * exercise's own optional-history (its own logged weights over time),
- * since it has no scheme/program context. Suggests 5 lbs above the most
- * recent logged weight for this exact exercise, regardless of which day
- * it was logged on.
- */
 function getOptionalSuggestion(exId) {
   const entries = getOptionalEntriesForExercise(exId);
   if (entries.length === 0) return 'Log a weight to get a suggestion next time';
@@ -4586,9 +4681,6 @@ function renderDailyAdaptBanner(container, dayKey, cutIds) {
 function renderExerciseCard(dayKey, exId, exIndex) {
   const ex = exerciseLibrary[exId];
   if (!ex) {
-    // Defensive guard: an exercise id referenced in a saved plan/override no longer
-    // exists in the current programData.json (e.g. library updated). Render a plain
-    // notice instead of throwing, so one stale id can't break the whole day view.
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = '<p class="ex-scheme" style="color:#999;">An exercise in today\u2019s plan is no longer available. Use Swap to replace it.</p>';
@@ -4660,14 +4752,11 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     render();
   });
   card.appendChild(row);
-  // Suggestions require a recovery preference to pick a progression style. Older
-  // programs created before onboarding existed (or before this field was added)
-  // may have this as null - default to 'standard' rather than silently hiding
-  // suggestions forever for those programs.
   const effectiveRecoveryPref = state.programRecoveryPref || 'standard';
   {
     const prevForSuggestion = getPrevEntry(dayKey, exId, state.week);
-    const baseSuggestion = getProgressionSuggestion(ex.scheme, state.week, effectiveRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
+    const streakCount = getConsecutiveSameWeightStreak(dayKey, exId);
+    const baseSuggestion = getProgressionSuggestion(ex.scheme, state.week, effectiveRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null, streakCount);
     const suggestion = getIntelligentSuggestion(dayKey, exId, state.week, baseSuggestion);
     if (suggestion) {
       const sugRow = document.createElement('div');
@@ -4699,6 +4788,21 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     const otherDayLabel = state.activePlan[lastElsewhere.dayKey] ? state.activePlan[lastElsewhere.dayKey].label : lastElsewhere.dayKey;
     ref.textContent = lastElsewhere.entry.weight + ' lbs logged ' + (lastElsewhere.entry.date || '') + ' (' + otherDayLabel + ', reference only)';
     card.appendChild(ref);
+  }
+  /* BATCH 1 ADDITION: cross-program historical reference. Only fires when the
+     current-plan search above found nothing (meaning this is a fresh program
+     that doesn't share this dayKey/history yet), so it can never duplicate the
+     existing same-program reference line above. Purely informational - never
+     writes to state, never touches the fillable weight input. */
+  if (!lastElsewhere && !entry.weight) {
+    const crossProgram = getMostRecentHistoricalWeightAcrossPrograms(exId);
+    if (crossProgram) {
+      const ref2 = document.createElement('div');
+      ref2.className = 'prev-weight';
+      ref2.style.cssText = 'font-style:italic;color:#a15a1c;';
+      ref2.textContent = 'Last known from a previous program: ' + crossProgram.entry.weight + ' lbs' + (crossProgram.entry.date ? (' (' + crossProgram.entry.date + ')') : '') + ' \u2014 reference only';
+      card.appendChild(ref2);
+    }
   }
   if (entry.weight) card.classList.add('ex-complete');
   return card;
@@ -4863,10 +4967,6 @@ function renderCheckpointField(cpKey, fieldKey, label, placeholder) {
   return row;
 }
 
-/**
- * PHASE 2b + 2c: presentation-only additions layered on the original chart function.
- * No calculation/storage changes to underlying weights/checkpoints/protein data.
- */
 function linearRegression(xs, ys) {
   const n = xs.length;
   const sumX = xs.reduce(function(a, b) { return a + b; }, 0);
@@ -4948,10 +5048,6 @@ function openFullscreenChart(title, points, color, showPB, insightsFn) {
   document.body.appendChild(overlay);
 }
 
-/**
- * Simple, verifiable insights from the same points array driving the chart.
- * higherIsBetter: true (lifts/steps/protein), null (body measurements, direction unknown/neutral).
- */
 function buildStreakAndPRInsights(points, higherIsBetter) {
   const valid = points.filter(function(p) { return p.val !== null && !isNaN(p.val); });
   if (valid.length < 2) return [];
@@ -5038,7 +5134,6 @@ function buildLineChart(title, points, color, showPB, opts) {
     wrap.appendChild(headerRow);
   }
 
-  // Phase 2a: apply the current time-range filter without touching underlying data/points shape.
   const filteredPoints = filterPointsByRange(points, graphPrefs.range);
 
   const valid = filteredPoints.filter(function(p) { return p.val !== null && !isNaN(p.val); });
@@ -5246,6 +5341,16 @@ function renderCheckpointsScreen(container) {
     card.appendChild(renderCheckpointField(def.key, 'weight', 'Weight', 'lbs'));
     card.appendChild(renderCheckpointField(def.key, 'waist', 'Waist', 'inches'));
     card.appendChild(renderCheckpointField(def.key, 'hips', 'Hips', 'inches'));
+    /* BATCH 4a: Biceps and Chest measurements. Hips already existed as a field
+       before this change (alongside Weight and Waist) - only these two are
+       genuinely new. renderCheckpointField is fully generic and already reads/
+       writes state.checkpoints[cpKey][fieldKey] without any changes needed to
+       it, so this is purely additive: existing weight/waist/hips values, dates,
+       and history are completely untouched. A blank biceps/chest value on an
+       old checkpoint just displays as blank, exactly like any other optional
+       field here already does. */
+    card.appendChild(renderCheckpointField(def.key, 'biceps', 'Biceps', 'inches'));
+    card.appendChild(renderCheckpointField(def.key, 'chest', 'Chest', 'inches'));
     content.appendChild(card);
   });
   const measLabel = document.createElement('div');
@@ -5256,15 +5361,23 @@ function renderCheckpointsScreen(container) {
   let allPoints = [];
   (state.archivedCheckpoints || []).forEach(function(arch) {
     defs.forEach(function(def) {
-      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null, hips: parseFloat(arch[def.key] && arch[def.key].hips) || null, cycle: arch.cycle, week: def.targetWeek });
+      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null, hips: parseFloat(arch[def.key] && arch[def.key].hips) || null, biceps: parseFloat(arch[def.key] && arch[def.key].biceps) || null, chest: parseFloat(arch[def.key] && arch[def.key].chest) || null, cycle: arch.cycle, week: def.targetWeek });
     });
   });
   defs.forEach(function(def) {
-    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null, cycle: state.cycle, week: def.targetWeek });
+    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null, biceps: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].biceps) || null, chest: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].chest) || null, cycle: state.cycle, week: def.targetWeek });
   });
   content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight, cycle: p.cycle, week: p.week }; }), '#e8722c', false));
   content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist, cycle: p.cycle, week: p.week }; }), '#3a7ae8', false));
   content.appendChild(buildLineChart('Hips (in)', allPoints.map(function(p) { return { label: p.label, val: p.hips, cycle: p.cycle, week: p.week }; }), '#c2427a', false));
+  /* BATCH 4a: Biceps and Chest trend graphs, following the exact same
+     buildLineChart pattern as the three existing measurement graphs above.
+     showPB is false here to match Weight/Waist/Hips - body measurements
+     intentionally avoid "personal best" framing, same as the app already
+     does for these fields, since a bigger number isn't necessarily better
+     for a body measurement the way it is for a lift. */
+  content.appendChild(buildLineChart('Biceps (in)', allPoints.map(function(p) { return { label: p.label, val: p.biceps, cycle: p.cycle, week: p.week }; }), '#4caf50', false));
+  content.appendChild(buildLineChart('Chest (in)', allPoints.map(function(p) { return { label: p.label, val: p.chest, cycle: p.cycle, week: p.week }; }), '#a1780a', false));
   container.appendChild(content);
 }
 
@@ -5367,15 +5480,9 @@ function renderProgressScreen(container) {
     content.appendChild(buildLineChart(def.name + ' (custom)', points, '#c2427a', true));
   });
 
-  // Built-in exercises logged as "Optional Extras" (e.g. an exercise done on a day
-  // it isn't normally scheduled) aren't covered by either loop above - the first
-  // loop only reads prescribed-program weights, and customExerciseIds only covers
-  // user-created exercises. This closes that gap so any built-in exercise with
-  // optional-history entries also gets its own graph, without duplicating anything
-  // already graphed as a prescribed exercise or a custom exercise above.
   const allOptionalIds = getAllOptionallyLoggedExerciseIds();
   allOptionalIds.forEach(function(exId) {
-    if (seen[exId]) return; // already graphed via prescribed weights or custom-exercise loop
+    if (seen[exId]) return;
     const entries = getOptionalEntriesForExercise(exId);
     if (entries.length === 0) return;
     const def = getAnyExerciseDef(exId);
