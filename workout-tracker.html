@@ -1478,10 +1478,28 @@ function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList,
   muscleKeys.forEach(function(m) { filteredPool[m].forEach(function(exId) { flatList.push(exId); }); });
   let uniqueList = flatList.filter(function(v, i) { return flatList.indexOf(v) === i; });
 
+  /* AUDIT FIX (Weight Loss hybrid training): the previous cardio-reordering step here was
+     completely overwritten a few lines down by prioritizeByFocusMuscles, which rebuilds the
+     candidate order from scratch by focus-muscle groups and dumps every cardio-tagged exercise
+     (muscle: 'cardio' is never itself a "focus muscle") into the leftover bucket at the very end.
+     Combined with other selected focuses (e.g. Bigger Arms + Bigger Shoulders), those focus-muscle
+     exercises filled every available slot first, so cardioBias's intended conditioning contribution
+     was silently crowded out rather than actually guaranteed - the opposite of "cardio-only," but
+     still a real bug: cardio effectively never showed up once other focuses were also selected.
+
+     Fix: reserve exactly ONE cardio slot up front, independent of the resistance-focused selection
+     below, so Weight Loss (or any other cardioBias focus) always contributes real conditioning
+     without competing against - or crowding out - resistance work for other focuses. Which cardio
+     exercise is chosen rotates via rotationOffset, so it isn't always the same one every day. */
+  let reservedCardioId = null;
   if (focusBias && focusBias.cardioBias) {
-    const cardioIds = uniqueList.filter(function(id) { return exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'; });
-    const nonCardioIds = uniqueList.filter(function(id) { return !(exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'); });
-    uniqueList = cardioIds.concat(nonCardioIds);
+    const cardioIdsAvailable = uniqueList.filter(function(id) { return exerciseLibrary[id] && exerciseLibrary[id].muscle === 'cardio'; });
+    if (cardioIdsAvailable.length > 0) {
+      reservedCardioId = cardioIdsAvailable[rotationOffset % cardioIdsAvailable.length];
+      // Remove it from the general pool so it can't also be picked a second time by the
+      // resistance-focused selection below, and so it never displaces a resistance slot.
+      uniqueList = uniqueList.filter(function(id) { return id !== reservedCardioId; });
+    }
   }
 
   if (mobilityFocusIds && mobilityFocusIds.length > 0) {
@@ -1503,6 +1521,12 @@ function buildGeneratedDay(dayKey, dayLabelType, musclePool, exCount, avoidList,
   }
 
   const chosen = [];
+  // The reserved cardio pick (if any) is guaranteed a spot first, so it can never be crowded out
+  // by resistance-focus prioritization, and never displaces more than the one slot it occupies.
+  if (reservedCardioId) {
+    const substitutedCardio = substituteIfAvoided(reservedCardioId, avoidList, equipment);
+    chosen.push(substitutedCardio);
+  }
   for (let i = 0; i < rotated.length && chosen.length < effectiveExCount; i++) {
     const substituted = substituteIfAvoided(rotated[i], avoidList, equipment);
     if (chosen.indexOf(substituted) === -1) chosen.push(substituted);
@@ -2946,6 +2970,28 @@ function removeExerciseForProgram(dayKey, exIndex) {
   toast('Removed for the rest of this program');
 }
 
+/**
+ * "Just Today" fix (audit item 4): swaps exId to newExId for ONLY the current occurrence
+ * of dayKey, using the exact same weeklyOverrides mechanism removeExerciseForToday already
+ * uses correctly. This does NOT touch state.activePlan, so the underlying program - and every
+ * future occurrence of this day - is completely unaffected. Reads via getEffectiveDay first,
+ * so it correctly layers on top of any prior override already active for this exact day/week/
+ * cycle instance, rather than assuming state.activePlan is the current source of truth.
+ */
+function swapExerciseForToday(dayKey, exIndex, newExId) {
+  const baseDay = getEffectiveDay(dayKey);
+  const newExerciseIds = baseDay.exerciseIds.slice();
+  newExerciseIds[exIndex] = newExId;
+  const newDayContent = Object.assign({}, baseDay, { exerciseIds: newExerciseIds });
+  const ovKey = weekOverrideKey(state.viewingCycle, state.week);
+  if (!state.weeklyOverrides) state.weeklyOverrides = {};
+  if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
+  state.weeklyOverrides[ovKey][dayKey] = newDayContent;
+  saveState();
+  render();
+  toast('Swapped for today');
+}
+
 function openSwapModal(dayKey, exIndex) {
   const day = getEffectiveDay(dayKey);
   const currentExId = day.exerciseIds[exIndex];
@@ -3007,9 +3053,14 @@ function openSwapModal(dayKey, exIndex) {
       const todayBtn = document.createElement('button');
       todayBtn.className = 'swap-btn today';
       todayBtn.textContent = 'Just Today';
+      // AUDIT FIX (item 4): this previously wrote directly to state.activePlan[dayKey].exerciseIds,
+      // identical to "Always" below - meaning "Just Today" permanently altered the underlying
+      // program and every future occurrence of this day, not just today's. It now uses the
+      // weeklyOverrides-based swapExerciseForToday, matching how removeExerciseForToday already
+      // correctly scopes its change to only the current day/week/cycle occurrence.
       todayBtn.onclick = function() {
-        state.activePlan[dayKey].exerciseIds[exIndex] = optId;
-        saveState(); document.body.removeChild(overlay); render(); toast('Swapped for today');
+        document.body.removeChild(overlay);
+        swapExerciseForToday(dayKey, exIndex, optId);
       };
       btns.appendChild(todayBtn);
       const permBtn = document.createElement('button');
