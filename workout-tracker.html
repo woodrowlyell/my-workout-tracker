@@ -165,12 +165,6 @@ const goalTemplates = {
     desc: 'Mobility and flexibility focused sessions, built around your chosen areas of focus',
     subgoals: null,
     usesFocusLibrary: true
-  },
-  weight_loss: {
-    label: 'Weight Loss',
-    desc: 'Full-body resistance training to preserve lean muscle, paired with sustainable conditioning to support fat loss, built around your chosen areas of focus',
-    subgoals: null,
-    usesFocusLibrary: true
   }
 };
 
@@ -197,7 +191,8 @@ const focusLibrary = {
     { value: 'cardio_fatloss', label: 'Cardio', muscles: [], cardioBias: true },
     { value: 'core_fatloss', label: 'Core', muscles: ['core'] },
     { value: 'upper_body_fatloss', label: 'Upper Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] },
-    { value: 'lower_body_fatloss', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general', 'calves'] }
+    { value: 'lower_body_fatloss', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general', 'calves'] },
+    { value: 'weight_loss_focus', label: 'Weight Loss', muscles: [], cardioBias: true }
   ],
   build_muscle: [
     { value: 'full_body_muscle', label: 'Full Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs_quad', 'legs_posterior', 'legs_general', 'core'] },
@@ -208,7 +203,8 @@ const focusLibrary = {
     { value: 'shoulders_muscle', label: 'Shoulders', muscles: ['shoulders'] },
     { value: 'arms_muscle', label: 'Arms', muscles: ['biceps', 'triceps'] },
     { value: 'legs_muscle', label: 'Legs', muscles: ['legs_quad', 'legs_posterior', 'legs_general'] },
-    { value: 'glutes_muscle', label: 'Glutes', muscles: ['legs_posterior'] }
+    { value: 'glutes_muscle', label: 'Glutes', muscles: ['legs_posterior'] },
+    { value: 'weight_loss_focus', label: 'Weight Loss', muscles: [], cardioBias: true }
   ],
   improve_fitness: [
     { value: 'general_fitness_focus', label: 'General Fitness', muscles: ['chest', 'back', 'shoulders', 'legs_quad', 'legs_posterior', 'core'] },
@@ -217,7 +213,8 @@ const focusLibrary = {
     { value: 'work_capacity', label: 'Work Capacity', muscles: ['legs_quad', 'legs_posterior', 'core'], cardioBias: true },
     { value: 'full_body_fitness', label: 'Full Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs_quad', 'legs_posterior', 'core'] },
     { value: 'core_fitness', label: 'Core', muscles: ['core'] },
-    { value: 'lower_body_fitness', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general'] }
+    { value: 'lower_body_fitness', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general'] },
+    { value: 'weight_loss_focus', label: 'Weight Loss', muscles: [], cardioBias: true }
   ],
   improve_mobility: [
     { value: 'full_body_mobility', label: 'Full Body Mobility', muscles: [], mobilityBias: true },
@@ -227,15 +224,8 @@ const focusLibrary = {
     { value: 'shoulders_mobility', label: 'Shoulders', muscles: ['shoulders'], mobilityBias: true },
     { value: 'back_mobility', label: 'Back', muscles: ['back'], mobilityBias: true },
     { value: 'hamstrings_mobility', label: 'Hamstrings', muscles: ['legs_posterior'], mobilityBias: true },
-    { value: 'balance_mobility', label: 'Balance', muscles: ['legs_general'], mobilityBias: true }
-  ],
-  weight_loss: [
-    { value: 'full_body_weightloss', label: 'Full Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs_quad', 'legs_posterior', 'legs_general', 'core'] },
-    { value: 'strength_focus_weightloss', label: 'Strength Focus', muscles: ['chest', 'back', 'shoulders', 'legs_quad', 'legs_posterior'] },
-    { value: 'conditioning_weightloss', label: 'Conditioning', muscles: [], cardioBias: true },
-    { value: 'upper_body_weightloss', label: 'Upper Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] },
-    { value: 'lower_body_weightloss', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general', 'calves'] },
-    { value: 'core_weightloss', label: 'Core', muscles: ['core'] }
+    { value: 'balance_mobility', label: 'Balance', muscles: ['legs_general'], mobilityBias: true },
+    { value: 'weight_loss_focus', label: 'Weight Loss', muscles: [], cardioBias: true }
   ]
 };
 
