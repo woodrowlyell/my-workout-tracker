@@ -3066,8 +3066,21 @@ function openSwapModal(dayKey, exIndex) {
       const permBtn = document.createElement('button');
       permBtn.className = 'swap-btn permanent';
       permBtn.textContent = 'Always';
+      // BUG FIX: "Always" correctly updated state.activePlan, but if a weeklyOverrides snapshot
+      // already existed for the CURRENT day/week (e.g. left over from an earlier "Just Today" swap
+      // on a different exercise in this same workout), getEffectiveDay would keep returning that
+      // stale snapshot first, so the just-made "Always" change was invisible for today - it only
+      // took effect starting next week, once no override existed and activePlan was read directly.
+      // Fix: if a current-week override exists for this dayKey, patch its exerciseIds at the same
+      // index too, so today's view stays in sync with the underlying program change immediately,
+      // while any OTHER exercise's Just-Today override already present in that same day is left
+      // completely intact.
       permBtn.onclick = function() {
         state.activePlan[dayKey].exerciseIds[exIndex] = optId;
+        const ovKey = weekOverrideKey(state.viewingCycle, state.week);
+        if (state.weeklyOverrides && state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dayKey] && state.weeklyOverrides[ovKey][dayKey].exerciseIds) {
+          state.weeklyOverrides[ovKey][dayKey].exerciseIds[exIndex] = optId;
+        }
         saveState(); document.body.removeChild(overlay); render(); toast('Swapped going forward');
       };
       btns.appendChild(permBtn);
