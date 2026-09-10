@@ -165,6 +165,12 @@ const goalTemplates = {
     desc: 'Mobility and flexibility focused sessions, built around your chosen areas of focus',
     subgoals: null,
     usesFocusLibrary: true
+  },
+  weight_loss: {
+    label: 'Weight Loss',
+    desc: 'Full-body resistance training to preserve lean muscle, paired with sustainable conditioning to support fat loss, built around your chosen areas of focus',
+    subgoals: null,
+    usesFocusLibrary: true
   }
 };
 
@@ -222,6 +228,14 @@ const focusLibrary = {
     { value: 'back_mobility', label: 'Back', muscles: ['back'], mobilityBias: true },
     { value: 'hamstrings_mobility', label: 'Hamstrings', muscles: ['legs_posterior'], mobilityBias: true },
     { value: 'balance_mobility', label: 'Balance', muscles: ['legs_general'], mobilityBias: true }
+  ],
+  weight_loss: [
+    { value: 'full_body_weightloss', label: 'Full Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'legs_quad', 'legs_posterior', 'legs_general', 'core'] },
+    { value: 'strength_focus_weightloss', label: 'Strength Focus', muscles: ['chest', 'back', 'shoulders', 'legs_quad', 'legs_posterior'] },
+    { value: 'conditioning_weightloss', label: 'Conditioning', muscles: [], cardioBias: true },
+    { value: 'upper_body_weightloss', label: 'Upper Body', muscles: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] },
+    { value: 'lower_body_weightloss', label: 'Lower Body', muscles: ['legs_quad', 'legs_posterior', 'legs_general', 'calves'] },
+    { value: 'core_weightloss', label: 'Core', muscles: ['core'] }
   ]
 };
 
@@ -920,7 +934,8 @@ const onboardingSteps = [
       { value: 'shoulder_health', label: 'Improve Shoulder Health' },
       { value: 'grip_strength', label: 'Increase Grip Strength' },
       { value: 'mobility', label: 'Improve Mobility' },
-      { value: 'cardio_endurance', label: 'Better Cardiovascular Endurance' }
+      { value: 'cardio_endurance', label: 'Better Cardiovascular Endurance' },
+      { value: 'weight_loss_focus', label: 'Weight Loss' }
     ]
   },
   {
@@ -1360,6 +1375,20 @@ const secondaryFocusToMuscleGroups = {
   shoulder_health: ['shoulders']
 };
 
+/**
+ * Which of the fixed Get Stronger / General Fitness style secondary focus
+ * values (from onboardingSteps[0].options) carry a real cardio/conditioning
+ * bias, mirroring the cardioBias flag that focusLibrary entries already use
+ * for the newer goals. weight_loss_focus is the only current entry; grip_strength,
+ * mobility, and cardio_endurance remain intentionally unmapped elsewhere since
+ * they don't correspond to an honest muscle-group or bias effect in this
+ * exercise pool. This is read by getFocusBiasFlags below - the existing single
+ * source of truth for bias flags - so no second bias mechanism is created.
+ */
+const secondaryFocusCardioBias = {
+  weight_loss_focus: true
+};
+
 function getFocusMuscleGroups(secondaryFocusList, goalKey) {
   const muscles = {};
   const tmpl = goalTemplates[goalKey];
@@ -1380,7 +1409,19 @@ function getFocusMuscleGroups(secondaryFocusList, goalKey) {
 function getFocusBiasFlags(secondaryFocusList, goalKey) {
   const tmpl = goalTemplates[goalKey];
   const flags = { cardioBias: false, mobilityBias: false };
-  if (!tmpl || !tmpl.usesFocusLibrary) return flags;
+  if (!tmpl || !tmpl.usesFocusLibrary) {
+    // FIX: this path (Get Stronger, General Fitness, etc.) previously always
+    // returned no bias at all, meaning a secondary focus like Weight Loss could
+    // never have a real conditioning effect on these goals - only cosmetic
+    // labeling. This now checks the same kind of bias flag the newer
+    // usesFocusLibrary goals already use, via secondaryFocusCardioBias, so
+    // "Get Stronger + Weight Loss" actually biases exercise selection toward
+    // appropriate conditioning without becoming a different program.
+    (secondaryFocusList || []).forEach(function(focusKey) {
+      if (secondaryFocusCardioBias[focusKey]) flags.cardioBias = true;
+    });
+    return flags;
+  }
   const options = getFocusOptionsForGoal(goalKey);
   (secondaryFocusList || []).forEach(function(focusValue) {
     const found = options.filter(function(o) { return o.value === focusValue; })[0];
@@ -1719,11 +1760,11 @@ function buildProgramHighlights(answers) {
       const fociLabels = answers.secondaryFocus.map(function(v) { return getFocusLabelForGoal(goalKey, v); }).join(', ');
       highlights.push('Areas of focus: ' + fociLabels + '. Your program will balance emphasis across these areas while keeping ' + goalLabel + ' as the primary goal.');
     } else {
-      const biasedFoci = answers.secondaryFocus.filter(function(v) { return secondaryFocusToMuscleGroups[v]; });
-      const infoOnlyFoci = answers.secondaryFocus.filter(function(v) { return !secondaryFocusToMuscleGroups[v]; });
+      const biasedFoci = answers.secondaryFocus.filter(function(v) { return secondaryFocusToMuscleGroups[v] || secondaryFocusCardioBias[v]; });
+      const infoOnlyFoci = answers.secondaryFocus.filter(function(v) { return !secondaryFocusToMuscleGroups[v] && !secondaryFocusCardioBias[v]; });
       if (biasedFoci.length > 0) {
         const fociLabels = biasedFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
-        highlights.push('Extra exercises prioritized for ' + fociLabels);
+        highlights.push('Extra exercises and appropriate conditioning prioritized for ' + fociLabels);
       }
       if (infoOnlyFoci.length > 0) {
         const infoLabels = infoOnlyFoci.map(function(v) { return optionLabelLookups.secondaryFocus[v]; }).join(' and ');
@@ -2975,7 +3016,7 @@ function openSwapModal(dayKey, exIndex) {
       btns.className = 'swap-btns';
       const todayBtn = document.createElement('button');
       todayBtn.className = 'swap-btn today';
-      todayBtn.textContent = 'Just today';
+      todayBtn.textContent = 'Just Today';
       todayBtn.onclick = function() {
         state.activePlan[dayKey].exerciseIds[exIndex] = optId;
         saveState(); document.body.removeChild(overlay); render(); toast('Swapped for today');
