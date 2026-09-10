@@ -2054,6 +2054,26 @@ async function loadState() {
       migrateToPerDayKeys();
     }
   } catch (e) {}
+  /* BUG FIX: legacy programs created before state.currentFocusAreas existed would show every
+     checkbox on Admin -> Areas of Focus as unchecked, even though the user originally selected
+     focus areas when that program was set up. This is a pure state-initialization gap, not a
+     workout-generation issue - it does NOT call generatePersonalizedProgram, buildGeneratedDay,
+     or any other regeneration path, and it never touches state.activePlan, weeklyOverrides, or any
+     workout/history data. It only backfills the missing display field from the program's own
+     already-recorded onboarding answers (state.onboarding.answers.secondaryFocus), which
+     generatePersonalizedProgram has always populated at generation time and never clears
+     afterward, and which therefore reliably reflects the CURRENTLY ACTIVE program's original
+     selections whenever no newer onboarding session has since replaced it. If currentFocusAreas
+     already has a value (including an intentional mid-program change the user already made), or
+     no reliable original answer exists, nothing here happens - selections are never invented. */
+  if ((!state.currentFocusAreas || state.currentFocusAreas.length === 0) &&
+      state.activePlan &&
+      state.onboarding && state.onboarding.answers &&
+      Array.isArray(state.onboarding.answers.secondaryFocus) &&
+      state.onboarding.answers.secondaryFocus.length > 0) {
+    state.currentFocusAreas = state.onboarding.answers.secondaryFocus.slice();
+    saveState();
+  }
   if (!state.autoBackupHistory) state.autoBackupHistory = [];
   if (state.activePlan) {
     takeAutoBackupIfDue();
