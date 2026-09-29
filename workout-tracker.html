@@ -4327,7 +4327,7 @@ function setTodaysAdaptChoice(dayKey, choice) {
   saveDailyAdaptState(all);
 }
 
-const ADAPT_TIME_BUDGETS = { '15min': 15, '30min': 30, '45min': 45 };
+const ADAPT_TIME_BUDGETS = { '15min': 15, '30min': 30, '45min': 45, '60min': 60, '75min': 90 };
 
 const compoundPatterns = [
   'squat', 'deadlift', 'rdl', 'press', 'row', 'pulldown', 'pull_up', 'pullup',
@@ -4892,11 +4892,20 @@ function renderDailyAdaptBanner(container, dayKey, cutIds) {
 
   const optionsRow = document.createElement('div');
   optionsRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+  /* FIX: previously capped at 45 minutes regardless of the program's original duration, making
+     that original selection an unintended MAXIMUM. adaptWorkoutToTime already handled a larger
+     budget correctly on its own (it returns the full, untrimmed exerciseIds list whenever the
+     day's total time fits within the chosen budget - no fabricated exercises), so exposing 60/75+
+     as real choices here needed no changes to the underlying adaptation logic, only to this list
+     and the ADAPT_TIME_BUDGETS table above. The original program duration remains just the
+     day-to-day default; every option below is available every day, independent of it. */
   const options = [
     { key: 'planned', label: 'Planned Workout' },
     { key: '15min', label: '15 Min' },
     { key: '30min', label: '30 Min' },
-    { key: '45min', label: '45 Min' }
+    { key: '45min', label: '45 Min' },
+    { key: '60min', label: '60 Min' },
+    { key: '75min', label: '75+ Min' }
   ];
   options.forEach(function(opt) {
     const isActive = (opt.key === 'planned' && !currentChoice) || (currentChoice === opt.key);
@@ -5590,15 +5599,14 @@ function renderCheckpointsScreen(container) {
     card.appendChild(renderCheckpointField(def.key, 'weight', 'Weight', 'lbs'));
     card.appendChild(renderCheckpointField(def.key, 'waist', 'Waist', 'inches'));
     card.appendChild(renderCheckpointField(def.key, 'hips', 'Hips', 'inches'));
-    /* BATCH 4a: Biceps and Chest measurements. Hips already existed as a field
-       before this change (alongside Weight and Waist) - only these two are
-       genuinely new. renderCheckpointField is fully generic and already reads/
-       writes state.checkpoints[cpKey][fieldKey] without any changes needed to
-       it, so this is purely additive: existing weight/waist/hips values, dates,
-       and history are completely untouched. A blank biceps/chest value on an
-       old checkpoint just displays as blank, exactly like any other optional
-       field here already does. */
-    card.appendChild(renderCheckpointField(def.key, 'biceps', 'Biceps', 'inches'));
+    /* BUG FIX: single "Biceps" field split into independent Left Biceps / Right Biceps fields.
+       The OLD 'biceps' key in state.checkpoints[cpKey] is intentionally left completely untouched
+       here - any existing data stored under it is preserved exactly as-is in localStorage, but the
+       UI no longer reads or writes to it, since there is no reliable way to know which arm an old
+       single value represented. New entries only ever write to the new 'bicepsLeft'/'bicepsRight'
+       keys, which start blank for every existing user regardless of prior 'biceps' data. */
+    card.appendChild(renderCheckpointField(def.key, 'bicepsLeft', 'Left Biceps', 'inches'));
+    card.appendChild(renderCheckpointField(def.key, 'bicepsRight', 'Right Biceps', 'inches'));
     card.appendChild(renderCheckpointField(def.key, 'chest', 'Chest', 'inches'));
     content.appendChild(card);
   });
@@ -5610,22 +5618,20 @@ function renderCheckpointsScreen(container) {
   let allPoints = [];
   (state.archivedCheckpoints || []).forEach(function(arch) {
     defs.forEach(function(def) {
-      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null, hips: parseFloat(arch[def.key] && arch[def.key].hips) || null, biceps: parseFloat(arch[def.key] && arch[def.key].biceps) || null, chest: parseFloat(arch[def.key] && arch[def.key].chest) || null, cycle: arch.cycle, week: def.targetWeek });
+      allPoints.push({ label: 'C' + arch.cycle + ' ' + def.title, weight: parseFloat(arch[def.key] && arch[def.key].weight) || null, waist: parseFloat(arch[def.key] && arch[def.key].waist) || null, hips: parseFloat(arch[def.key] && arch[def.key].hips) || null, bicepsLeft: parseFloat(arch[def.key] && arch[def.key].bicepsLeft) || null, bicepsRight: parseFloat(arch[def.key] && arch[def.key].bicepsRight) || null, chest: parseFloat(arch[def.key] && arch[def.key].chest) || null, cycle: arch.cycle, week: def.targetWeek });
     });
   });
   defs.forEach(function(def) {
-    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null, biceps: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].biceps) || null, chest: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].chest) || null, cycle: state.cycle, week: def.targetWeek });
+    allPoints.push({ label: (state.cycle > 1 ? ('C' + state.cycle + ' ') : '') + def.title, weight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].weight) || null, waist: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].waist) || null, hips: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].hips) || null, bicepsLeft: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].bicepsLeft) || null, bicepsRight: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].bicepsRight) || null, chest: parseFloat(state.checkpoints[def.key] && state.checkpoints[def.key].chest) || null, cycle: state.cycle, week: def.targetWeek });
   });
   content.appendChild(buildLineChart('Weight (lbs)', allPoints.map(function(p) { return { label: p.label, val: p.weight, cycle: p.cycle, week: p.week }; }), '#e8722c', false));
   content.appendChild(buildLineChart('Waist (in)', allPoints.map(function(p) { return { label: p.label, val: p.waist, cycle: p.cycle, week: p.week }; }), '#3a7ae8', false));
   content.appendChild(buildLineChart('Hips (in)', allPoints.map(function(p) { return { label: p.label, val: p.hips, cycle: p.cycle, week: p.week }; }), '#c2427a', false));
-  /* BATCH 4a: Biceps and Chest trend graphs, following the exact same
-     buildLineChart pattern as the three existing measurement graphs above.
-     showPB is false here to match Weight/Waist/Hips - body measurements
-     intentionally avoid "personal best" framing, same as the app already
-     does for these fields, since a bigger number isn't necessarily better
-     for a body measurement the way it is for a lift. */
-  content.appendChild(buildLineChart('Biceps (in)', allPoints.map(function(p) { return { label: p.label, val: p.biceps, cycle: p.cycle, week: p.week }; }), '#4caf50', false));
+  /* Left Biceps and Right Biceps are graphed as fully independent series, each following the
+     exact same buildLineChart pattern as every other measurement - no shared history, no PB
+     framing, matching the existing convention for body measurements. */
+  content.appendChild(buildLineChart('Left Biceps (in)', allPoints.map(function(p) { return { label: p.label, val: p.bicepsLeft, cycle: p.cycle, week: p.week }; }), '#4caf50', false));
+  content.appendChild(buildLineChart('Right Biceps (in)', allPoints.map(function(p) { return { label: p.label, val: p.bicepsRight, cycle: p.cycle, week: p.week }; }), '#2e7d32', false));
   content.appendChild(buildLineChart('Chest (in)', allPoints.map(function(p) { return { label: p.label, val: p.chest, cycle: p.cycle, week: p.week }; }), '#a1780a', false));
   container.appendChild(content);
 }
