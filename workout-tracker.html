@@ -5174,7 +5174,7 @@ function renderExerciseCard(dayKey, exId, exIndex) {
      appears at all (getEffectiveDay already filters it out before this card is ever
      built), so there is nothing for this checkbox to reflect after the fact. */
   const removeCheckboxLabel = document.createElement('label');
-  removeCheckboxLabel.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:11px;color:#999;flex-shrink:0;cursor:pointer;';
+  removeCheckboxLabel.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:11px;color:#999;flex-shrink:0;cursor:pointer;white-space:nowrap;';
   const removeCheckbox = document.createElement('input');
   removeCheckbox.type = 'checkbox';
   removeCheckbox.style.cssText = 'width:16px;height:16px;accent-color:#b31942;';
@@ -5183,6 +5183,9 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     openExerciseRemovalPrompt(dayKey, exId, ex.name, function() { removeCheckbox.checked = false; });
   };
   removeCheckboxLabel.appendChild(removeCheckbox);
+  const removeCheckboxText = document.createElement('span');
+  removeCheckboxText.textContent = 'Remove/Skip';
+  removeCheckboxLabel.appendChild(removeCheckboxText);
   actions.appendChild(removeCheckboxLabel);
   if (ex.link) {
     const a = document.createElement('a');
