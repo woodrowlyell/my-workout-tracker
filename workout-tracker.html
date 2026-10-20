@@ -259,10 +259,39 @@ function getEffectiveDay(dayKey, cycle, week) {
   const c = cycle !== undefined ? cycle : state.viewingCycle;
   const w = week !== undefined ? week : state.week;
   const ovKey = weekOverrideKey(c, w);
+  let day;
   if (state.weeklyOverrides && state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dayKey]) {
-    return state.weeklyOverrides[ovKey][dayKey];
+    day = state.weeklyOverrides[ovKey][dayKey];
+  } else {
+    day = state.activePlan[dayKey];
   }
-  return state.activePlan[dayKey];
+  /* NEW: "Remove for the Rest of This Cycle" filtering. Applied here, after resolving either
+     a weekly override or the base activePlan day, so every consumer of getEffectiveDay
+     (rendering, completion checks, time adaptation, swap-exclusion lists) automatically and
+     consistently treats a cycle-removed exercise as absent, without needing its own separate
+     awareness of this feature. Scoped strictly to: the SAME cycle number the removal was made
+     in (a new cycle of the same program starts with no entries at all, so it is never
+     affected), and weeks at or after the week the removal was recorded (so completed earlier
+     weeks in that same cycle are read exactly as they always were - this never alters
+     historical/completed records, only what is returned for an UNSTARTED week going forward).
+     This never mutates state.activePlan or the override object itself - it returns a new
+     shallow-copied day object with a filtered exerciseIds array. */
+  if (day && !day.rest && day.exerciseIds && day.exerciseIds.length > 0) {
+    const cycleKey = 'c' + c;
+    const removalsForCycle = state.cycleExerciseRemovals && state.cycleExerciseRemovals[cycleKey];
+    if (removalsForCycle && removalsForCycle[dayKey] && removalsForCycle[dayKey].length > 0) {
+      const applicableRemovals = removalsForCycle[dayKey].filter(function(r) { return w >= r.sinceWeek; });
+      if (applicableRemovals.length > 0) {
+        const removedIds = {};
+        applicableRemovals.forEach(function(r) { removedIds[r.exId] = true; });
+        const filteredIds = day.exerciseIds.filter(function(id) { return !removedIds[id]; });
+        if (filteredIds.length !== day.exerciseIds.length) {
+          day = Object.assign({}, day, { exerciseIds: filteredIds });
+        }
+      }
+    }
+  }
+  return day;
 }
 
 let stateVersion = 0;
@@ -302,7 +331,8 @@ let state = {
   programRecoveryPref: null,
   programPriority: null,
   weeklyOverrides: {},
-  currentFocusAreas: []
+  currentFocusAreas: [],
+  cycleExerciseRemovals: {}
 };
 
 const GRAPH_PREFS_KEY = 'workout-graph-prefs-v1';
@@ -3012,6 +3042,94 @@ function swapExerciseForToday(dayKey, exIndex, newExId) {
   toast('Swapped for today');
 }
 
+/**
+ * "Remove for the Rest of This Cycle" (new removal scope). Records that exId should be
+ * excluded from dayKey starting at the CURRENT week, for the remainder of the CURRENTLY
+ * ACTIVE cycle (state.cycle, not state.viewingCycle - this is a forward-looking change to
+ * the live program, consistent with how mid-program focus changes already distinguish
+ * "active" from "being viewed"). Does not touch state.activePlan, state.weeklyOverrides, or
+ * state.weights - getEffectiveDay applies this filter on read, non-destructively, and only
+ * for weeks at or after sinceWeek within this exact cycle number. A new cycle of the same
+ * program (a different cycle number) is never affected, since lookups are keyed by cycle.
+ */
+function removeExerciseForRestOfCycle(dayKey, exId) {
+  if (!state.cycleExerciseRemovals) state.cycleExerciseRemovals = {};
+  const cycleKey = 'c' + state.cycle;
+  if (!state.cycleExerciseRemovals[cycleKey]) state.cycleExerciseRemovals[cycleKey] = {};
+  if (!state.cycleExerciseRemovals[cycleKey][dayKey]) state.cycleExerciseRemovals[cycleKey][dayKey] = [];
+  const already = state.cycleExerciseRemovals[cycleKey][dayKey].some(function(r) { return r.exId === exId; });
+  if (!already) {
+    /* Conservative choice for an ambiguous edge case: if TODAY's occurrence of this exact
+       day/week is already in progress (reusing the same "unstarted" definition already
+       established for mid-program focus changes), the removal takes effect starting the
+       NEXT occurrence rather than retroactively pulling the exercise out of a session the
+       user may be in the middle of - matching the spec's explicit "do not unexpectedly
+       alter an in-progress workout" constraint. If today has not been started yet, the
+       removal applies starting immediately, consistent with "eligible unstarted workouts"
+       including today when today itself qualifies. */
+    const todayUnstarted = isDayUnstartedForFocusChange(dayKey, state.week, state.cycle);
+    const sinceWeek = todayUnstarted ? state.week : state.week + 1;
+    state.cycleExerciseRemovals[cycleKey][dayKey].push({ exId: exId, sinceWeek: sinceWeek });
+  }
+  saveState();
+  render();
+  toast('Removed for the rest of this cycle');
+}
+
+/**
+ * In-app confirmation prompt for the per-exercise removal checkbox, matching the app's
+ * existing modal conventions (same classes/structure as other confirmation dialogs here)
+ * rather than a disruptive browser confirm()/alert(). Cancelling restores the checkbox by
+ * simply re-rendering without recording any removal - render() is always called after the
+ * checkbox's own change handler toggles it back, so no separate "restore" step is needed
+ * beyond not persisting a removal.
+ */
+function openExerciseRemovalPrompt(dayKey, exId, exName, onCancelRestoreCheckbox) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.alignItems = 'center';
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-sheet';
+  sheet.style.cssText = 'border-radius:20px;max-width:400px;margin:0 auto;';
+  sheet.innerHTML = '<h3>Remove ' + exName + '?</h3><div class="modal-sub">Choose how this removal should apply.</div>';
+
+  const todayOnlyBtn = document.createElement('button');
+  todayOnlyBtn.className = 'goal-btn';
+  todayOnlyBtn.style.cssText = 'text-align:center;';
+  todayOnlyBtn.innerHTML = 'Remove from This Workout Only<div class="desc">Only today\u2019s workout is affected \u2014 future weeks are unchanged</div>';
+  todayOnlyBtn.onclick = function() {
+    document.body.removeChild(overlay);
+    const day = getEffectiveDay(dayKey);
+    const exIndex = (day.exerciseIds || []).indexOf(exId);
+    if (exIndex === -1) { render(); return; }
+    removeExerciseForToday(dayKey, exIndex);
+  };
+  sheet.appendChild(todayOnlyBtn);
+
+  const restOfCycleBtn = document.createElement('button');
+  restOfCycleBtn.className = 'goal-btn';
+  restOfCycleBtn.style.cssText = 'text-align:center;';
+  restOfCycleBtn.innerHTML = 'Remove for the Rest of This Cycle<div class="desc">Removes it from eligible future unstarted weeks in the current cycle only</div>';
+  restOfCycleBtn.onclick = function() {
+    document.body.removeChild(overlay);
+    removeExerciseForRestOfCycle(dayKey, exId);
+  };
+  sheet.appendChild(restOfCycleBtn);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'modal-close';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function() {
+    document.body.removeChild(overlay);
+    if (onCancelRestoreCheckbox) onCancelRestoreCheckbox();
+  };
+  sheet.appendChild(cancelBtn);
+
+  overlay.appendChild(sheet);
+  overlay.onclick = function(e) { if (e.target === overlay && onCancelRestoreCheckbox) { onCancelRestoreCheckbox(); document.body.removeChild(overlay); } };
+  document.body.appendChild(overlay);
+}
+
 function openSwapModal(dayKey, exIndex) {
   const day = getEffectiveDay(dayKey);
   const currentExId = day.exerciseIds[exIndex];
@@ -3741,6 +3859,14 @@ function deleteCycle(cycleNum) {
   state.archivedCheckpoints = (state.archivedCheckpoints || []).filter(function(a) { return a.cycle !== cycleNum; });
   state.goalHistory = (state.goalHistory || []).filter(function(g) { return g.cycle !== cycleNum; });
 
+  /* NEW: clean up any "Remove for the Rest of This Cycle" records tied to a deleted cycle,
+     consistent with how this function already removes weights/protein/checkpoints scoped to
+     that same cycle number. A future cycle reusing the same split/day layout should not
+     inherit stale removal records from a cycle that no longer exists. */
+  if (state.cycleExerciseRemovals) {
+    delete state.cycleExerciseRemovals['c' + cycleNum];
+  }
+
   const cycleTag = 'c' + cycleNum + '-';
   state.celebratedDays = (state.celebratedDays || []).filter(function(k) { return k.indexOf(cycleTag) !== 0; });
   state.celebratedWeeks = (state.celebratedWeeks || []).filter(function(k) { return k.indexOf(cycleTag) !== 0; });
@@ -3968,7 +4094,14 @@ function getConsecutiveSameWeightStreak(dayKey, exId) {
   return streak;
 }
 
-function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWeight, streakCount) {
+/* AUDIT FIX: this function previously made its OWN increase-eligibility decision via
+   streakCount, independent of (and directly contradicted by) the deload check that used
+   to live in a separate function. That decision now belongs solely to
+   getProgressionOrDeloadDecision above, which is mutually exclusive with deload by
+   construction. getProgressionSuggestion's job is now narrower and purely presentational:
+   given that an increase has already been judged appropriate, produce the specific
+   rep/weight suggestion text for this exercise's scheme and recovery preference. */
+function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWeight) {
   const match = scheme.match(/(\d+)\s*x\s*(\d+)/);
   if (!match) return null;
   const sets = parseInt(match[1], 10);
@@ -3980,52 +4113,91 @@ function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWe
     return 'Try ' + (parseFloat(mostRecentLoggedWeight) + weightStep) + ' lbs (up from your last logged ' + mostRecentLoggedWeight + ' lbs)';
   }
 
-  // BATCH 3 FIX: no increase of any kind (weight or reps) is suggested until
-  // PROGRESSION_SUCCESS_THRESHOLD consecutive same-weight sessions have been
-  // logged. Below that threshold, either there isn't enough history yet, or
-  // performance hasn't been consistent enough yet to recommend more - in
-  // both cases, no suggestion is the correct, conservative behavior.
-  const streak = streakCount || 0;
-  if (streak < PROGRESSION_SUCCESS_THRESHOLD) {
-    return null;
-  }
-
   if (recoveryPref === 'aggressive') {
-    return { type: 'weight', text: 'You\u2019re showing consistent progress at ' + mostRecentLoggedWeight + ' lbs. Consider increasing slightly next session. ' + weightSuggestion() };
+    return { type: 'weight', text: weightSuggestion() };
   }
   if (recoveryPref === 'joint_friendly') {
     const cyclePosition = ((week - 1) % 5);
     if (cyclePosition >= 4) {
       return { type: 'weight', text: 'Rep ceiling reached \u2014 ' + weightSuggestion() };
     }
-    return { type: 'reps', text: 'You\u2019re showing consistent progress at this weight. Consider ' + sets + ' x ' + (baseReps + cyclePosition + 1) + ' next session.' };
+    return { type: 'reps', text: sets + ' x ' + (baseReps + cyclePosition + 1) + ' next session' };
   }
   if (week % 2 === 1) {
-    return { type: 'reps', text: 'You\u2019re showing consistent progress at this weight. Consider ' + sets + ' x ' + (baseReps + 2) + ' next session.' };
+    return { type: 'reps', text: sets + ' x ' + (baseReps + 2) + ' next session' };
   }
-  return { type: 'weight', text: 'You\u2019re showing consistent progress at ' + mostRecentLoggedWeight + ' lbs. Consider increasing slightly next session. ' + weightSuggestion() };
+  return { type: 'weight', text: weightSuggestion() };
 }
 
-function detectWeightStall(entries) {
-  if (!entries || entries.length < 3) return null;
-  const lastThree = entries.slice(-3);
-  const netChange = lastThree[2].weight - lastThree[0].weight;
-  if (netChange <= 0) return { last3: lastThree.map(function(e) { return e.weight; }) };
-  return null;
-}
+/* =========================================================
+   AUDIT FIX (progression/deload contradiction): the previous implementation had two
+   INDEPENDENT mechanisms that could fire on the SAME data and directly contradict each
+   other. getProgressionSuggestion recommended an INCREASE whenever the same weight had
+   been logged 3 times in a row (PROGRESSION_SUCCESS_THRESHOLD). Separately,
+   detectWeightStall treated "no net change across the last 3 sessions" (which includes
+   the EXACT SAME 3-same-weight pattern) as grounds for a DELOAD, and that deload check
+   ran first and silently overrode the increase suggestion every time - meaning the
+   increase path could never actually fire for that pattern at all.
 
-function getIntelligentSuggestion(dayKey, exId, week, baseSuggestion) {
+   Root problem underneath both: the app has never stored completed reps, prescribed-range
+   adherence, or set-by-set performance - only a single logged weight and a done/not-done
+   flag per exercise/day/week/cycle (confirmed via getEntry/setEntry). "Same weight 3
+   times" is NOT, by itself, evidence of either successful performance (worth increasing)
+   or struggling performance (worth a deload) - it's simply the only consistency signal
+   this data model can honestly support. Treating it as sufficient evidence for either
+   recommendation, let alone both, overstated what the app actually knows.
+
+   Fix: a single, mutually-exclusive decision function replaces both detectWeightStall and
+   the increase-threshold check inside getProgressionSuggestion. It requires a genuinely
+   DECLINING weight trend (not mere repetition) before ever suggesting a deload, and
+   requires actual, uninterrupted consistency AND a cooldown after any recent weight
+   change before ever suggesting an increase - and the two outcomes can never both apply
+   to the same data, so there is no longer any contradiction to produce. The suggestion
+   text is also phrased around logged-weight consistency specifically, rather than implying
+   certainty about reps or form the app has no way to know.
+   ========================================================= */
+function getProgressionOrDeloadDecision(dayKey, exId) {
   const entries = getAllEntriesForExercise(exId)
     .filter(function(e) { return e.dayKey === dayKey; })
-    .sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week); });
-  const stall = detectWeightStall(entries);
-  if (stall) {
+    .sort(function(a, b) {
+      if (a.date && b.date) return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0);
+      return (a.cycle - b.cycle) || (a.week - b.week);
+    });
+  if (entries.length < PROGRESSION_SUCCESS_THRESHOLD) {
+    return { type: 'none', reason: 'insufficient logged history for this exercise/day yet' };
+  }
+  const lastN = entries.slice(-PROGRESSION_SUCCESS_THRESHOLD);
+  const weights = lastN.map(function(e) { return e.weight; });
+  let strictlyDecreasing = true;
+  for (let i = 1; i < weights.length; i++) {
+    if (!(weights[i] < weights[i - 1])) { strictlyDecreasing = false; break; }
+  }
+  let allSame = true;
+  for (let i = 1; i < weights.length; i++) {
+    if (weights[i] !== weights[0]) { allSame = false; break; }
+  }
+  // Cooldown: if the entry immediately before this consistent run shows a lower weight,
+  // the user just increased - do not immediately suggest increasing again off one new
+  // session's carryover into the "same weight" window.
+  const priorIdx = entries.length - PROGRESSION_SUCCESS_THRESHOLD - 1;
+  const justIncreased = priorIdx >= 0 && entries[priorIdx].weight < weights[0];
+
+  if (strictlyDecreasing) {
     return {
       type: 'deload',
-      text: 'No progress the last 3 sessions (' + stall.last3.join(' \u2192 ') + ' lbs). Consider a deload \u2014 drop 10\u201315% and rebuild, or take extra rest before this lift.'
+      text: 'Logged weight has declined over your last ' + PROGRESSION_SUCCESS_THRESHOLD + ' sessions (' + weights.join(' \u2192 ') + ' lbs). Consider a lighter session, extra rest, or dropping back to a weight you can hit consistently before building up again.'
     };
   }
-  return baseSuggestion;
+  if (allSame && !justIncreased) {
+    return {
+      type: 'increase',
+      text: 'You\u2019ve logged ' + weights[0] + ' lbs for ' + PROGRESSION_SUCCESS_THRESHOLD + ' sessions in a row. If that\u2019s felt manageable, consider a small increase next session \u2014 this is based on logged weight consistency only, so use your own judgment on readiness.'
+    };
+  }
+  if (allSame && justIncreased) {
+    return { type: 'none', reason: 'weight was recently increased - allowing performance to rebuild before suggesting another change' };
+  }
+  return { type: 'none', reason: 'recent logged weights are mixed - not enough consistency either direction to recommend a change' };
 }
 
 function getRecentWorkoutCompletions(n) {
@@ -4577,10 +4749,21 @@ function getOptionalEntriesForExercise(exId) {
     const cycle = parts[1] ? parseInt(parts[1].replace('c', ''), 10) : 1;
     const week = parts[2] ? parseInt(parts[2].replace('w', ''), 10) : 1;
     (history[dayKeyCombo] || []).forEach(function(entry) {
-      if (entry.exId === exId) results.push({ dayKey: dayKey, cycle: cycle, week: week, weight: parseFloat(entry.weight), date: entry.date });
+      if (entry.exId === exId && entry.weight !== '' && entry.weight !== null && entry.weight !== undefined && !isNaN(parseFloat(entry.weight))) {
+        results.push({ dayKey: dayKey, cycle: cycle, week: week, weight: parseFloat(entry.weight), date: entry.date });
+      }
     });
   });
-  results.sort(function(a, b) { return (a.cycle - b.cycle) || (a.week - b.week) || (dayOrderIndex(a.dayKey) - dayOrderIndex(b.dayKey)); });
+  /* AUDIT FIX: previously sorted purely by cycle/week/day-order position, which can return a
+     stale "most recent" entry whenever logging order and week/cycle numbering diverge (e.g.
+     a day logged out of its normal weekly sequence). Now prefers each entry's own stored
+     date (set at logging time, same ISO-sortable format used elsewhere in the app), falling
+     back to the old position-based order only for legacy entries that predate dates being
+     recorded at all. */
+  results.sort(function(a, b) {
+    if (a.date && b.date) return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0);
+    return (a.cycle - b.cycle) || (a.week - b.week) || (dayOrderIndex(a.dayKey) - dayOrderIndex(b.dayKey));
+  });
   return results;
 }
 
@@ -4810,9 +4993,12 @@ function openOptionalExerciseSelector(dayKey) {
 
 function addOptionalExerciseToToday(dayKey, exId) {
   if (isExerciseAlreadyLoggedToday(dayKey, exId)) { render(); return; }
-  const entries = getOptionalEntriesForExercise(exId);
-  const startingWeight = entries.length > 0 ? entries[entries.length - 1].weight : 0;
-  logOptionalExercise(dayKey, exId, startingWeight);
+  /* AUDIT FIX: previously pre-filled today's editable weight with the exercise's most recent
+     historical weight the instant it was added, silently inserting a value the user never
+     entered - inconsistent with how every other exercise card leaves "This week" blank until
+     manually filled in. The entry now starts genuinely blank; the historical weight is shown
+     separately, below the input, by renderOptionalExercisesSection - informational only. */
+  logOptionalExercise(dayKey, exId, '');
   render();
   toast('Added \u2014 enter your weight below');
 }
@@ -4857,13 +5043,32 @@ function renderOptionalExercisesSection(container, dayKey) {
 
     const row = document.createElement('div');
     row.className = 'weight-row';
-    row.innerHTML = '<label>This week</label><input type="number" inputmode="decimal" placeholder="0" value="' + entry.weight + '" /><span class="unit">lbs</span>';
+    /* AUDIT FIX: entry.weight may now legitimately be blank (freshly added, not yet logged) -
+       render that as an empty input rather than the literal string "". parseFloat/Number
+       checks below correctly treat an empty string as "no value" without ever inserting a
+       historical number into this editable field. */
+    const displayValue = (entry.weight === '' || entry.weight === null || entry.weight === undefined) ? '' : entry.weight;
+    row.innerHTML = '<label>This week</label><input type="number" inputmode="decimal" placeholder="0" value="' + displayValue + '" /><span class="unit">lbs</span>';
     const input = row.querySelector('input');
     input.addEventListener('change', function() {
       const val = parseFloat(input.value);
       if (val && val > 0) { updateOptionalExerciseWeight(entry.id, dayKey, val); render(); }
     });
     card.appendChild(row);
+
+    /* AUDIT FIX: historical weight is now purely informational, shown below the editable
+       input, and is never written into the input itself. getOptionalSuggestion already
+       reads from getOptionalEntriesForExercise, which now correctly excludes today's own
+       not-yet-logged placeholder entry, so this reflects a genuinely PRIOR completed
+       value, not today's blank row. */
+    const priorEntries = getOptionalEntriesForExercise(entry.exId);
+    if (priorEntries.length > 0) {
+      const mostRecentPrior = priorEntries[priorEntries.length - 1];
+      const lastLiftedRow = document.createElement('div');
+      lastLiftedRow.className = 'prev-weight';
+      lastLiftedRow.textContent = 'Last lifted: ' + mostRecentPrior.weight + ' lb' + (mostRecentPrior.date ? (' (' + mostRecentPrior.date + ')') : '');
+      card.appendChild(lastLiftedRow);
+    }
 
     const sugRow = document.createElement('div');
     sugRow.style.cssText = 'font-size:12px;color:#1c3a7a;background:#eef3fb;border-radius:6px;padding:6px 8px;margin-top:8px;';
@@ -4962,6 +5167,23 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   top.appendChild(left);
   const actions = document.createElement('div');
   actions.className = 'ex-actions';
+  /* NEW: per-exercise removal checkbox. Checking it opens the existing-style in-app
+     confirmation (openExerciseRemovalPrompt) rather than a disruptive browser confirm().
+     The checkbox itself holds no removal state of its own - it is always rendered
+     unchecked on every render, since a genuinely removed exercise simply no longer
+     appears at all (getEffectiveDay already filters it out before this card is ever
+     built), so there is nothing for this checkbox to reflect after the fact. */
+  const removeCheckboxLabel = document.createElement('label');
+  removeCheckboxLabel.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:11px;color:#999;flex-shrink:0;cursor:pointer;';
+  const removeCheckbox = document.createElement('input');
+  removeCheckbox.type = 'checkbox';
+  removeCheckbox.style.cssText = 'width:16px;height:16px;accent-color:#b31942;';
+  removeCheckbox.onchange = function() {
+    if (!removeCheckbox.checked) return;
+    openExerciseRemovalPrompt(dayKey, exId, ex.name, function() { removeCheckbox.checked = false; });
+  };
+  removeCheckboxLabel.appendChild(removeCheckbox);
+  actions.appendChild(removeCheckboxLabel);
   if (ex.link) {
     const a = document.createElement('a');
     a.className = 'ex-btn';
@@ -5012,15 +5234,24 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   card.appendChild(row);
   const effectiveRecoveryPref = state.programRecoveryPref || 'standard';
   {
-    const prevForSuggestion = getPrevEntry(dayKey, exId, state.week);
-    const streakCount = getConsecutiveSameWeightStreak(dayKey, exId);
-    const baseSuggestion = getProgressionSuggestion(ex.scheme, state.week, effectiveRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null, streakCount);
-    const suggestion = getIntelligentSuggestion(dayKey, exId, state.week, baseSuggestion);
+    /* AUDIT FIX: getProgressionOrDeloadDecision is now the single, mutually-exclusive
+       source of truth for whether to show an increase suggestion, a deload suggestion,
+       or nothing at all - replacing the old dual-path logic where a separate deload check
+       could silently override an increase recommendation triggered by the same data. */
+    const decision = getProgressionOrDeloadDecision(dayKey, exId);
+    let suggestion = null;
+    if (decision.type === 'deload') {
+      suggestion = { type: 'deload', text: decision.text };
+    } else if (decision.type === 'increase') {
+      const prevForSuggestion = getPrevEntry(dayKey, exId, state.week);
+      const detail = getProgressionSuggestion(ex.scheme, state.week, effectiveRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
+      suggestion = detail ? { type: detail.type, text: decision.text + ' ' + detail.text } : { type: 'weight', text: decision.text };
+    }
     if (suggestion) {
       const sugRow = document.createElement('div');
       const isDeload = suggestion.type === 'deload';
       sugRow.style.cssText = 'font-size:12px;color:' + (isDeload ? '#7a4a1c' : '#1c3a7a') + ';background:' + (isDeload ? '#fdf0e6' : '#eef3fb') + ';border-radius:6px;padding:6px 8px;margin-top:8px;';
-      sugRow.textContent = (isDeload ? '' : 'Suggested: ') + suggestion.text;
+      sugRow.textContent = suggestion.text;
       card.appendChild(sugRow);
     }
   }
