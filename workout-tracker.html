@@ -255,13 +255,41 @@ function dayOrderIndex(dayKey) {
   return idx === -1 ? 99 : idx;
 }
 
+const PAST_CYCLE_EDIT_MESSAGE = 'Past cycles are read-only. Switch to your current cycle to change workouts.';
+
+function cloneDay(day) { return JSON.parse(JSON.stringify(day)); }
+
+/* True if ANY logged value (weight, done flag, steps, mobility, etc.) exists for this day/week/cycle. */
+function dayHasLoggedData(dayKey, week, cycle) {
+  const suffix = '::c' + cycle + '::w' + week;
+  const prefix = dayKey + '::';
+  return Object.keys(state.weights).some(function(k) {
+    return k.indexOf(prefix) === 0 && k.indexOf('::__steps__::') === -1 && k.length > suffix.length && k.slice(-suffix.length) === suffix && !!state.weights[k];
+  });
+}
+
+function exerciseHasLoggedData(dayKey, exId, week, cycle) {
+  return !!getEntry(dayKey, exId, week, cycle);
+}
+
+/* Returns a user-facing reason string when an edit is not allowed, otherwise null. */
+function workoutEditBlockReason(dayKey, exId) {
+  if (state.viewingCycle !== state.cycle) return PAST_CYCLE_EDIT_MESSAGE;
+  if (exId && exerciseHasLoggedData(dayKey, exId, state.week, state.viewingCycle)) {
+    return 'This exercise already has logged data for this week, so it cannot be changed. Your logged entries stay exactly as recorded.';
+  }
+  return null;
+}
+
 function getEffectiveDay(dayKey, cycle, week) {
   const c = cycle !== undefined ? cycle : state.viewingCycle;
   const w = week !== undefined ? week : state.week;
   const ovKey = weekOverrideKey(c, w);
   let day;
+  let usedOverride = false;
   if (state.weeklyOverrides && state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dayKey]) {
     day = state.weeklyOverrides[ovKey][dayKey];
+    usedOverride = true;
   } else {
     day = state.activePlan[dayKey];
   }
@@ -276,7 +304,7 @@ function getEffectiveDay(dayKey, cycle, week) {
      historical/completed records, only what is returned for an UNSTARTED week going forward).
      This never mutates state.activePlan or the override object itself - it returns a new
      shallow-copied day object with a filtered exerciseIds array. */
-  if (day && !day.rest && day.exerciseIds && day.exerciseIds.length > 0) {
+  if (!usedOverride && day && !day.rest && day.exerciseIds && day.exerciseIds.length > 0 && !dayHasLoggedData(dayKey, w, c)) {
     const cycleKey = 'c' + c;
     const removalsForCycle = state.cycleExerciseRemovals && state.cycleExerciseRemovals[cycleKey];
     if (removalsForCycle && removalsForCycle[dayKey] && removalsForCycle[dayKey].length > 0) {
@@ -1764,6 +1792,7 @@ function generatePersonalizedProgram() {
   state.goal = goalKey;
   state.selectedGoal = goalKey;
   state.selectedSubgoal = subgoalKey;
+  state.heavyStrength = null;
   state.activePlan = newActivePlan;
   state.programLength = answers.programLength;
   state.programRecoveryPref = answers.recovery;
@@ -2123,52 +2152,77 @@ const tutorialSlides = [
   },
   {
     title: 'Pick a goal and length',
-    body: 'Choose a focus and a program length of 4, 8, or 12 weeks. You can always start a new program later without losing your history.',
+    body: 'Choose a goal, answer a few quick questions, and the app builds your program around your answers. Programs run 4, 8, or 12 weeks. When you start a new program later, your past history stays saved.',
     mock: '<div class="goal-screen" style="padding:16px;text-align:left;"><h2 style="font-size:16px;">Choose a program length</h2><div class="goal-btn" style="pointer-events:none;">4 Weeks</div><div class="goal-btn" style="pointer-events:none;background:#1c1c1a;color:#fff;">8 Weeks</div><div class="goal-btn" style="pointer-events:none;">12 Weeks</div></div>'
   },
   {
     title: 'Your day, laid out',
-    body: 'Each day shows your warm-up, exercises with weight tracking, and a cooldown. Check off each part as you go. Short on time? Use the 15/30/45-minute options at the top of your day to trim accessory work \u2014 your full plan comes back automatically tomorrow.',
+    body: 'Each day has a mobility warm-up, a cardio warm-up, your exercises with weight entry, and a cooldown. Check off each part as you go. Short on time? Use "Short on time today?" at the top of the day to trim exercises to 15, 30, 45, 60, or 75+ minutes. The trim applies to today only, and your full plan returns tomorrow.',
     mock: '<div style="padding:16px;"><div class="card"><p class="ex-name">Machine chest press</p><p class="ex-scheme">3 x 10</p><div class="weight-row"><label>This week</label><input type="number" placeholder="0" style="pointer-events:none;" disabled><span class="unit">lbs</span></div></div><div class="check-row" style="padding-top:0;border-top:none;"><input type="checkbox" disabled><label>Completed cardio warm-up</label></div></div>'
   },
   {
+    title: 'Heavy Strength (optional)',
+    body: 'Find it under Admin, in Training Preferences. Turn on Heavy Strength, then choose 1 day a week, 2 days a week, or Custom days and pick the days. On those days, main lifts move to heavier ranges (4–6 reps for primary lifts, 6–8 for secondary), accessory lifts to 8–12, and isolation moves to 10–15. Your sets stay the same and you choose your own weights. Only unstarted workouts change. Pause or remove it any time, and your original workouts come back.',
+    mock: ''
+  },
+  {
+    title: 'Areas of Focus',
+    body: 'Under Admin, Areas of Focus lets you add, remove, or change the areas you want to emphasize. Your goal stays the same. Changes only affect workouts you have not started yet.',
+    mock: ''
+  },
+  {
     title: 'Swap what does not work',
-    body: 'Tap Swap on any exercise to pick an alternative that trains the same muscle group. You can also swap an entire day with another day if your schedule changes. Exercise cards also show smart suggestions \u2014 a weight or rep target based on your history, or a deload suggestion if a lift has stalled for a few weeks.',
+    body: 'Tap Swap on any exercise to choose a replacement for the same movement. "Just Today" changes this week only. "Always" changes future weeks. You can also swap an entire day with another day, either for this week only or for all future weeks. Exercises that already have logged data this week cannot be swapped, and completed weeks never change.',
     mock: '<div style="padding:16px;"><div class="ex-top"><div><p class="ex-name">Leg press</p><p class="ex-scheme">3 x 12</p></div><div class="ex-actions"><button class="ex-btn" style="pointer-events:none;">Swap</button></div></div><button style="width:100%;padding:10px;background:#eef3fb;border:1px solid #b9cdf0;color:#1c3a7a;border-radius:10px;font-size:13px;font-weight:600;margin-top:14px;" disabled>Swap this day with another day</button></div>'
   },
   {
+    title: 'Remove an exercise',
+    body: 'Tick "Remove/Skip" beside any exercise, then choose one of two options. "Remove from This Workout Only" affects this week. "Remove for the Rest of This Cycle" removes it from unstarted weeks in this cycle. Logged entries are never deleted, and past cycles cannot be changed.',
+    mock: ''
+  },
+  {
     title: 'Add your own exercises',
-    body: 'Anything you do beyond your planned workout \u2014 an extra lift, a favorite move, something not in your program \u2014 can be logged with "+ Add Optional Exercise" at the bottom of any day. Create your own exercises too; they get their own graphs, personal records, and history, just like built-in ones. Each day keeps its own optional exercises \u2014 they never carry over to a different day or week.',
+    body: 'Use "+ Add Optional Exercise" at the bottom of any day to add an extra exercise, or create your own. Each extra belongs to that day in that week, and it moves with the workout if you swap days. Under an extra, "Last lifted" shows the most recent weight you used. That number is only a reference, and the entry box always starts blank for you to fill in.',
     mock: '<div style="padding:16px;"><button style="width:100%;padding:12px;background:#fff;border:2px dashed #ddd;color:#1c1c1a;border-radius:10px;font-size:14px;font-weight:600;" disabled>+ Add Optional Exercise</button></div>'
   },
   {
+    title: 'Weight progression',
+    body: 'Enter the weight you used each session. A suggestion card appears only when your logged weights show a clear pattern. Three sessions in a row at the same weight can prompt a small increase. A steady drop over three sessions prompts a lighter session or rest. After a weight increase, the app waits for performance to settle before suggesting another. The app tracks logged weights, not reps, and you always choose your own weight.',
+    mock: ''
+  },
+  {
+    title: 'Recovery check-ins',
+    body: 'If you have missed several of your last scheduled workouts, or your step count drops well below your average, a Recovery check-in card appears at the top of your day. These are suggestions only. You decide what to do.',
+    mock: ''
+  },
+  {
     title: 'Track your checkpoints',
-    body: 'Log weight, waist, and hip measurements at the start and at key weeks. Each checkpoint has its own editable date, so it always matches when you actually measured.',
-    mock: '<div style="padding:16px;"><div class="checkpoint-card"><h3><span>Week 4</span></h3><div class="cp-row"><label>Weight</label><input type="text" placeholder="lbs" disabled></div><div class="cp-row"><label>Waist</label><input type="text" placeholder="inches" disabled></div></div></div>'
+    body: 'Log weight, waist, hips, chest, and left and right biceps at the start and at key weeks. Each checkpoint has its own date, and you can edit it. Left and right biceps are tracked separately.',
+    mock: '<div style="padding:16px;"><div class="checkpoint-card"><h3><span>Week 4</span></h3><div class="cp-row"><label>Weight</label><input type="text" placeholder="lbs" disabled></div><div class="cp-row"><label>Left Biceps</label><input type="text" placeholder="inches" disabled></div></div></div>'
   },
   {
     title: 'Keep an eye on protein',
-    body: 'Set a daily protein goal and log meals with quick-add presets or your own custom entries. You can look back at any day, not just today.',
+    body: 'Set a daily protein goal and log foods with quick-add presets or your own custom entries. You can look back at any day, not just today.',
     mock: '<div style="padding:16px;"><div class="card"><p class="ex-name">Protein today</p><div style="font-size:28px;font-weight:800;margin:6px 0;">92<span style="font-size:14px;color:#999;font-weight:600;"> slash 150g</span></div><div style="background:#f0efe9;border-radius:20px;height:8px;overflow:hidden;"><div style="background:#e8722c;height:100%;width:61%;"></div></div></div></div>'
   },
   {
     title: 'Graphs that tell a story',
-    body: 'Every chart supports trend lines, tap-a-point for exact values, and an Expand button for a full-screen view with Smart Insights \u2014 your logging streak, biggest jump, and more, computed straight from your own history.',
+    body: 'Every chart has a Trend button, tap-a-point for exact values, and an Expand button for a full-screen view with Smart Insights. Use the 30 Days, This Program, and All Time buttons to change the range.',
     mock: '<div style="padding:16px;"><div class="progress-ex-card"><h4>Bench Press</h4><svg class="chart" viewBox="0 0 320 100" style="pointer-events:none;"><path d="M20,70 L100,50 L180,55 L260,20" fill="none" stroke="#e8722c" stroke-width="2.5"/><circle cx="260" cy="20" r="6" fill="#ffd700" stroke="#a1780a" stroke-width="2"/></svg></div></div>'
   },
   {
-    title: 'Your Progress dashboard',
-    body: 'The Progress tab shows your overall program completion, a weekly summary of workouts and volume, and Achievements you unlock as you go \u2014 first workout, streaks, personal records, and volume milestones.',
+    title: 'Your Progress tab',
+    body: 'The Progress tab shows your program completion, a weekly summary, and Achievements you unlock as you go, including first workout, streaks, personal records, and volume milestones.',
     mock: '<div style="padding:16px;"><div class="card"><p class="ex-name" style="margin-bottom:10px;">Program Progress</p><div style="background:#f0efe9;border-radius:20px;height:10px;overflow:hidden;"><div style="background:#e8722c;height:100%;width:62%;"></div></div><div style="font-size:13px;color:#777;margin-top:6px;">62% complete</div></div></div>'
   },
   {
     title: 'Share your progress',
-    body: 'From the Progress tab, tap Share Progress to build a card with exactly the stats you want to show off \u2014 a strength gain, inches lost, a streak. You choose what goes on it before sharing or saving the image.',
-    mock: '<div style="padding:16px;"><div style="background:#1c1c1a;border-radius:12px;padding:20px;text-align:center;"><div style="color:#fff;font-weight:700;font-size:15px;">My Progress</div><div style="color:#e8722c;font-size:11px;font-weight:700;margin-top:12px;">STRENGTH GAINS</div><div style="color:#fff;font-size:13px;margin-top:4px;">Bench Press: 135 \u2192 165 lbs</div></div></div>'
+    body: 'From the Progress tab, tap Share Progress to build a card with exactly the stats you want to show. You choose what goes on it before sharing or saving the image.',
+    mock: '<div style="padding:16px;"><div style="background:#1c1c1a;border-radius:12px;padding:20px;text-align:center;"><div style="color:#fff;font-weight:700;font-size:15px;">My Progress</div><div style="color:#e8722c;font-size:11px;font-weight:700;margin-top:12px;">STRENGTH GAINS</div><div style="color:#fff;font-size:13px;margin-top:4px;">Bench Press: 135 → 165 lbs</div></div></div>'
   },
   {
     title: 'Your data stays backed up',
-    body: 'The app automatically keeps snapshots of your last few days, and you can download or copy a full backup anytime from the Admin tab \u2014 which also has cycle management, your personal exercise library, and this tutorial.',
+    body: 'The app keeps automatic snapshots of your last five days on this device. You can also download or copy a full backup from Admin. Admin also has cycle management, your personal exercise library, and this tutorial.',
     mock: '<div style="padding:16px;"><div class="backup-box"><h4>Back up your data</h4><p>Save a copy of your progress.</p><div class="backup-btn-row"><button class="backup-btn export" disabled>Download Backup</button><button class="backup-btn import" disabled>Copy as Text</button></div></div></div>'
   },
   {
@@ -2177,7 +2231,6 @@ const tutorialSlides = [
     mock: ''
   }
 ];
-
 function showTutorial(onFinish) {
   let step = 0;
   const overlay = document.createElement('div');
@@ -2280,6 +2333,201 @@ function renderTutorialTab(container) {
   container.appendChild(wrap);
 }
 
+/* =========================================================
+   STAGE 2: Heavy Strength (Training Preferences)
+   A reversible display overlay. It never edits activePlan, weeklyOverrides, or logs.
+   Only unstarted workouts on the selected days in the current cycle are affected.
+   ========================================================= */
+const HEAVY_STRENGTH_TIERS = {
+  primary: [4, 6], secondary: [6, 8], accessory: [8, 12], isolation: [10, 15]
+};
+const HEAVY_STRENGTH_EXERCISE_TIER = {
+  leg_press: 'primary', chest_press_machine: 'primary', shoulder_press_machine: 'primary',
+  smith_rdl: 'primary', smith_hip_thrust: 'primary', seated_barbell_press: 'primary',
+  incline_db_press: 'secondary', flat_db_press: 'secondary', db_shoulder_press: 'secondary',
+  goblet_squat: 'secondary', seated_cable_row: 'secondary', chest_supported_row: 'secondary',
+  cable_chest_press: 'secondary', arnold_press: 'secondary',
+  lat_pulldown: 'accessory', straight_arm_pulldown: 'accessory', seated_leg_curl: 'accessory',
+  leg_extension: 'accessory', calf_raise_machine: 'accessory', hip_abductor: 'accessory', hip_adductor: 'accessory',
+  cable_lateral_raise: 'isolation', db_lateral_raise: 'isolation', rear_delt_pec_deck: 'isolation',
+  face_pull: 'isolation', triceps_pushdown: 'isolation', triceps_kickback: 'isolation',
+  overhead_triceps_ext: 'isolation', hammer_curl: 'isolation', cable_curl: 'isolation', db_curl: 'isolation',
+  barbell_curl: 'isolation', ez_bar_curl: 'isolation', ab_crunch_machine: 'isolation',
+  torso_rotation: 'isolation', cable_woodchop: 'isolation'
+};
+
+function heavyStrengthMaxDays(mode) {
+  if (mode === 'one') return 1;
+  if (mode === 'two') return 2;
+  return 99;
+}
+
+function getWorkoutDayKeysForHeavy() {
+  if (!state.activePlan) return [];
+  return getOrderedDayKeys().filter(function(k) { return !state.activePlan[k].rest; });
+}
+
+/* True only for a selected day that is unstarted, in the current cycle, and not in a past week. */
+function isHeavyStrengthDay(dayKey, week, cycle) {
+  const hs = state.heavyStrength;
+  if (!hs || !hs.enabled || !hs.days || hs.days.indexOf(dayKey) === -1) return false;
+  if (cycle !== state.cycle || week < state.week) return false;
+  const day = state.activePlan && state.activePlan[dayKey];
+  if (!day || day.rest) return false;
+  return !dayHasLoggedData(dayKey, week, cycle);
+}
+
+/* Returns the scheme to DISPLAY. Sets are kept; only the rep range changes, per exercise tier. */
+function heavyStrengthSchemeFor(dayKey, exId, originalScheme) {
+  if (!isHeavyStrengthDay(dayKey, state.week, state.viewingCycle)) return originalScheme;
+  const tier = HEAVY_STRENGTH_EXERCISE_TIER[exId];
+  if (!tier) return originalScheme;
+  const m = (originalScheme || '').match(/^(\d+)\s*x\s*/);
+  if (!m) return originalScheme;
+  const range = HEAVY_STRENGTH_TIERS[tier];
+  return m[1] + ' x ' + range[0] + '-' + range[1];
+}
+
+function enableHeavyStrength() {
+  if (!state.activePlan) return;
+  const workoutDays = getWorkoutDayKeysForHeavy();
+  if (workoutDays.length === 0) { toast('No workout days to apply Heavy Strength to'); return; }
+  state.heavyStrength = { enabled: true, mode: 'one', days: [workoutDays[0]] };
+  saveState();
+  render();
+  toast('Heavy Strength on');
+}
+
+function resumeHeavyStrength() {
+  if (!state.heavyStrength) return;
+  state.heavyStrength.enabled = true;
+  saveState();
+  render();
+  toast('Heavy Strength resumed');
+}
+
+function disableHeavyStrength() {
+  if (!state.heavyStrength) return;
+  state.heavyStrength.enabled = false;
+  saveState();
+  render();
+  toast('Heavy Strength paused');
+}
+
+function removeHeavyStrength() {
+  if (!confirm('Remove Heavy Strength? Future unstarted workouts return to their original programming. Your logged data is not affected.')) return;
+  state.heavyStrength = null;
+  saveState();
+  render();
+  toast('Heavy Strength removed');
+}
+
+function setHeavyStrengthMode(mode) {
+  if (!state.heavyStrength) return;
+  const max = heavyStrengthMaxDays(mode);
+  const workoutDays = getWorkoutDayKeysForHeavy();
+  let days = state.heavyStrength.days.filter(function(k) { return workoutDays.indexOf(k) !== -1; }).slice(0, max);
+  if (days.length === 0 && workoutDays.length > 0) days = [workoutDays[0]];
+  state.heavyStrength.mode = mode;
+  state.heavyStrength.days = days;
+  saveState();
+  render();
+}
+
+function toggleHeavyStrengthDay(dayKey) {
+  if (!state.heavyStrength) return;
+  const hs = state.heavyStrength;
+  const max = heavyStrengthMaxDays(hs.mode);
+  let days = hs.days.slice();
+  const idx = days.indexOf(dayKey);
+  if (idx !== -1) {
+    days.splice(idx, 1);
+  } else {
+    if (days.length >= max) { toast('Switch to Custom days to choose more than ' + max); render(); return; }
+    days.push(dayKey);
+  }
+  hs.days = getOrderedDayKeys().filter(function(k) { return days.indexOf(k) !== -1; });
+  saveState();
+  render();
+}
+
+function renderTrainingPreferences(container) {
+  if (!state.activePlan) return;
+  const hs = state.heavyStrength;
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Training Preferences</p>' +
+    '<p class="ex-scheme" style="margin-bottom:10px;">Optional ways of performing your selected workouts. These change how sets are prescribed, not which muscles are trained.</p>';
+  const block = document.createElement('div');
+  block.style.cssText = 'border-top:1px solid #f0efe9;padding-top:10px;';
+  function note(text, style) {
+    const p = document.createElement('div');
+    p.style.cssText = style || 'font-size:12px;color:#777;margin-bottom:8px;';
+    p.textContent = text;
+    block.appendChild(p);
+  }
+  function btn(text, style, onclick) {
+    const b = document.createElement('button');
+    b.textContent = text;
+    b.style.cssText = style;
+    b.onclick = onclick;
+    block.appendChild(b);
+  }
+  const BTN_DARK = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;margin-bottom:8px;';
+  const BTN_LIGHT = 'width:100%;padding:10px;background:#f0efe9;color:#1c1c1a;border:none;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:8px;';
+  const BTN_DANGER = 'width:100%;padding:10px;background:#fff;color:#b31942;border:1px solid #f0cba4;border-radius:10px;font-size:13px;font-weight:600;';
+  const title = document.createElement('p');
+  title.className = 'ex-name';
+  title.style.cssText = 'font-size:14px;margin-bottom:4px;';
+  title.textContent = 'Heavy Strength';
+  block.appendChild(title);
+  if (!hs) {
+    note('Trains the same exercises with heavier loads and lower rep ranges on the days you choose. Sets stay the same, your weights stay under your control, and completed or in-progress workouts are never changed.');
+    btn('Enable Heavy Strength', BTN_DARK, enableHeavyStrength);
+  } else {
+    note(hs.enabled ? 'Status: On' : 'Status: Paused (your schedule is saved)', 'font-size:12px;font-weight:700;color:#1c3a7a;margin-bottom:8px;');
+    note('Applies only to unstarted workouts. Completed and in-progress workouts keep their original targets.');
+    const modeRow = document.createElement('div');
+    modeRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;';
+    [{ k: 'one', l: '1 day / week' }, { k: 'two', l: '2 days / week' }, { k: 'custom', l: 'Custom days' }].forEach(function(opt) {
+      const b = document.createElement('button');
+      const on = hs.mode === opt.k;
+      b.textContent = opt.l;
+      b.style.cssText = 'flex:1;padding:8px 6px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid ' + (on ? '#e8722c' : '#ddd') + ';background:' + (on ? '#fdf0e6' : '#fff') + ';';
+      b.onclick = function() { setHeavyStrengthMode(opt.k); };
+      modeRow.appendChild(b);
+    });
+    block.appendChild(modeRow);
+    const workoutDays = getWorkoutDayKeysForHeavy();
+    note('Workout days that receive Heavy Strength:');
+    workoutDays.forEach(function(dk) {
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = hs.days.indexOf(dk) !== -1;
+      cb.style.cssText = 'width:20px;height:20px;accent-color:#e8722c;';
+      cb.onchange = function() { toggleHeavyStrengthDay(dk); };
+      row.appendChild(cb);
+      const lbl = document.createElement('span');
+      lbl.textContent = state.activePlan[dk].label;
+      row.appendChild(lbl);
+      block.appendChild(row);
+    });
+    const maxDays = heavyStrengthMaxDays(hs.mode);
+    if (hs.mode !== 'custom' && workoutDays.length < maxDays) {
+      note('This program has ' + workoutDays.length + ' workout day' + (workoutDays.length === 1 ? '' : 's') + ', so ' + maxDays + ' per week is not possible. Showing all available days.');
+    }
+    if (hs.days.length === 0) note('Select at least one workout day to apply Heavy Strength.');
+    note('Targets by exercise type: primary lifts 4–6 reps, secondary 6–8, accessory 8–12, isolation 10–15. Sets are unchanged. Weight increases are only suggested when your logged weights support one.');
+    if (hs.enabled) btn('Pause Heavy Strength', BTN_LIGHT, disableHeavyStrength);
+    else btn('Resume Heavy Strength', BTN_DARK, resumeHeavyStrength);
+    btn('Remove Heavy Strength Entirely', BTN_DANGER, removeHeavyStrength);
+  }
+  wrap.appendChild(block);
+  container.appendChild(wrap);
+}
+
 function renderAdminScreen(container) {
   const content = document.createElement('div');
   content.className = 'content';
@@ -2293,6 +2541,7 @@ function renderAdminScreen(container) {
   renderAutoBackupList(content);
   renderCycleManager(content);
   renderFocusManagementTool(content);
+  renderTrainingPreferences(content);
 
   const restartWrap = document.createElement('div');
   restartWrap.className = 'card';
@@ -2581,6 +2830,7 @@ function finalizeProgram(goalKey, subgoalKey) {
   const isNewCycleTransition = state.cycle > 1 && state.activePlan;
   state.goal = goalKey;
   state.selectedSubgoal = subgoalKey;
+  state.heavyStrength = null;
   state.activePlan = JSON.parse(JSON.stringify(program.days));
   state.programLength = state.selectedLength;
   state.cycleStartDate = todayStr();
@@ -2989,10 +3239,13 @@ function getSwapAlternatives(exId, dayKey, excludeIds) {
  * no history is deleted, and the exercise remains fully intact in the global
  * library and in every other week/cycle.
  */
-function removeExerciseForToday(dayKey, exIndex) {
+function removeExerciseForToday(dayKey, exId) {
+  const reason = workoutEditBlockReason(dayKey, exId);
+  if (reason) { toast(reason); render(); return; }
   const baseDay = getEffectiveDay(dayKey);
-  const newExerciseIds = baseDay.exerciseIds.filter(function(id, idx) { return idx !== exIndex; });
-  const newDayContent = Object.assign({}, baseDay, { exerciseIds: newExerciseIds });
+  if (!baseDay || baseDay.rest || (baseDay.exerciseIds || []).indexOf(exId) === -1) { render(); return; }
+  const newExerciseIds = baseDay.exerciseIds.filter(function(id) { return id !== exId; });
+  const newDayContent = Object.assign(cloneDay(baseDay), { exerciseIds: newExerciseIds });
   const ovKey = weekOverrideKey(state.viewingCycle, state.week);
   if (!state.weeklyOverrides) state.weeklyOverrides = {};
   if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
@@ -3002,37 +3255,16 @@ function removeExerciseForToday(dayKey, exIndex) {
   toast('Removed for today only');
 }
 
-/**
- * "Remove for This Program": removes exId from state.activePlan[dayKey] itself,
- * so it no longer appears in any future, unstarted week of the current
- * program. This does NOT touch state.weeklyOverrides for past weeks (so a
- * week that already has a weekly override showing this exercise keeps showing
- * it, since that override was already a snapshot of a specific week), does
- * NOT rewrite completed workouts (those are read from getEntry/state.weights,
- * entirely separate from the plan template), and does NOT touch history,
- * other cycles, other programs, custom exercises, or Yoga.
- */
-function removeExerciseForProgram(dayKey, exIndex) {
-  const newExerciseIds = state.activePlan[dayKey].exerciseIds.filter(function(id, idx) { return idx !== exIndex; });
-  state.activePlan[dayKey] = Object.assign({}, state.activePlan[dayKey], { exerciseIds: newExerciseIds });
-  saveState();
-  render();
-  toast('Removed for the rest of this program');
-}
-
-/**
- * "Just Today" fix (audit item 4): swaps exId to newExId for ONLY the current occurrence
- * of dayKey, using the exact same weeklyOverrides mechanism removeExerciseForToday already
- * uses correctly. This does NOT touch state.activePlan, so the underlying program - and every
- * future occurrence of this day - is completely unaffected. Reads via getEffectiveDay first,
- * so it correctly layers on top of any prior override already active for this exact day/week/
- * cycle instance, rather than assuming state.activePlan is the current source of truth.
- */
-function swapExerciseForToday(dayKey, exIndex, newExId) {
+function swapExerciseForToday(dayKey, oldExId, newExId) {
+  const reason = workoutEditBlockReason(dayKey, oldExId);
+  if (reason) { toast(reason); render(); return; }
   const baseDay = getEffectiveDay(dayKey);
+  if (!baseDay || baseDay.rest) { render(); return; }
+  const idx = (baseDay.exerciseIds || []).indexOf(oldExId);
+  if (idx === -1) { render(); return; }
   const newExerciseIds = baseDay.exerciseIds.slice();
-  newExerciseIds[exIndex] = newExId;
-  const newDayContent = Object.assign({}, baseDay, { exerciseIds: newExerciseIds });
+  newExerciseIds[idx] = newExId;
+  const newDayContent = Object.assign(cloneDay(baseDay), { exerciseIds: newExerciseIds });
   const ovKey = weekOverrideKey(state.viewingCycle, state.week);
   if (!state.weeklyOverrides) state.weeklyOverrides = {};
   if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
@@ -3042,38 +3274,89 @@ function swapExerciseForToday(dayKey, exIndex, newExId) {
   toast('Swapped for today');
 }
 
-/**
- * "Remove for the Rest of This Cycle" (new removal scope). Records that exId should be
- * excluded from dayKey starting at the CURRENT week, for the remainder of the CURRENTLY
- * ACTIVE cycle (state.cycle, not state.viewingCycle - this is a forward-looking change to
- * the live program, consistent with how mid-program focus changes already distinguish
- * "active" from "being viewed"). Does not touch state.activePlan, state.weeklyOverrides, or
- * state.weights - getEffectiveDay applies this filter on read, non-destructively, and only
- * for weeks at or after sinceWeek within this exact cycle number. A new cycle of the same
- * program (a different cycle number) is never affected, since lookups are keyed by cycle.
- */
+/* Freezes every week BEFORE the week being viewed (current cycle only) so completed or earlier
+   weeks keep exactly the exercises they had, even after the program template changes.
+   Must run BEFORE state.activePlan is modified. */
+function freezePastWeeksForDays(dayKeys) {
+  if (state.viewingCycle !== state.cycle) return;
+  if (!state.weeklyOverrides) state.weeklyOverrides = {};
+  for (let w = 1; w < state.week; w++) {
+    const ovKey = weekOverrideKey(state.cycle, w);
+    dayKeys.forEach(function(dk) {
+      if (!state.activePlan[dk]) return;
+      if (state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dk]) return;
+      const effective = getEffectiveDay(dk, state.cycle, w);
+      if (!effective) return;
+      if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
+      state.weeklyOverrides[ovKey][dk] = cloneDay(effective);
+    });
+  }
+}
+
+/* "Always" swap: changes the program going forward. Matches the exercise by id, never by index,
+   because the displayed list can be shorter than the stored template (removals are filtered). */
+function swapExerciseForever(dayKey, oldExId, newExId) {
+  const reason = workoutEditBlockReason(dayKey, oldExId);
+  if (reason) { toast(reason); render(); return; }
+  const planDay = state.activePlan[dayKey];
+  if (!planDay || planDay.rest || (planDay.exerciseIds || []).indexOf(oldExId) === -1) { render(); return; }
+  freezePastWeeksForDays([dayKey]);
+  const newPlanDay = Object.assign({}, planDay, {
+    exerciseIds: planDay.exerciseIds.map(function(id) { return id === oldExId ? newExId : id; })
+  });
+  if (planDay.priorityIds) {
+    newPlanDay.priorityIds = planDay.priorityIds.map(function(id) { return id === oldExId ? newExId : id; });
+  }
+  state.activePlan[dayKey] = newPlanDay;
+  const ovKey = weekOverrideKey(state.cycle, state.week);
+  const ov = state.weeklyOverrides && state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dayKey];
+  if (ov && ov.exerciseIds && ov.exerciseIds.indexOf(oldExId) !== -1) {
+    ov.exerciseIds = ov.exerciseIds.map(function(id) { return id === oldExId ? newExId : id; });
+  }
+  saveState();
+  render();
+  toast('Swapped going forward');
+}
+
+/* Removes exId from unstarted weeks for the rest of the ACTIVE cycle. If the current week's workout
+   is unstarted the removal starts now; otherwise it starts next week. Logged weeks are never changed
+   (getEffectiveDay skips them). Records are per cycle, so other cycles and programs are unaffected. */
 function removeExerciseForRestOfCycle(dayKey, exId) {
+  const reason = workoutEditBlockReason(dayKey, null);
+  if (reason) { toast(reason); render(); return; }
+  const day = getEffectiveDay(dayKey);
+  if (!day || day.rest || (day.exerciseIds || []).indexOf(exId) === -1) { render(); return; }
   if (!state.cycleExerciseRemovals) state.cycleExerciseRemovals = {};
   const cycleKey = 'c' + state.cycle;
   if (!state.cycleExerciseRemovals[cycleKey]) state.cycleExerciseRemovals[cycleKey] = {};
   if (!state.cycleExerciseRemovals[cycleKey][dayKey]) state.cycleExerciseRemovals[cycleKey][dayKey] = [];
   const already = state.cycleExerciseRemovals[cycleKey][dayKey].some(function(r) { return r.exId === exId; });
   if (!already) {
-    /* Conservative choice for an ambiguous edge case: if TODAY's occurrence of this exact
-       day/week is already in progress (reusing the same "unstarted" definition already
-       established for mid-program focus changes), the removal takes effect starting the
-       NEXT occurrence rather than retroactively pulling the exercise out of a session the
-       user may be in the middle of - matching the spec's explicit "do not unexpectedly
-       alter an in-progress workout" constraint. If today has not been started yet, the
-       removal applies starting immediately, consistent with "eligible unstarted workouts"
-       including today when today itself qualifies. */
     const todayUnstarted = isDayUnstartedForFocusChange(dayKey, state.week, state.cycle);
     const sinceWeek = todayUnstarted ? state.week : state.week + 1;
     state.cycleExerciseRemovals[cycleKey][dayKey].push({ exId: exId, sinceWeek: sinceWeek });
+    if (sinceWeek === state.week) {
+      const ovKey = weekOverrideKey(state.cycle, state.week);
+      const ov = state.weeklyOverrides && state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dayKey];
+      if (ov && ov.exerciseIds) {
+        ov.exerciseIds = ov.exerciseIds.filter(function(id) { return id !== exId; });
+      }
+    }
   }
   saveState();
   render();
   toast('Removed for the rest of this cycle');
+}
+
+/* Moves the cycle-removal records of two workouts with them when their workouts are swapped. */
+function swapCycleRemovalRecords(dayA, dayB) {
+  const cycleKey = 'c' + state.cycle;
+  if (!state.cycleExerciseRemovals || !state.cycleExerciseRemovals[cycleKey]) return;
+  const bucket = state.cycleExerciseRemovals[cycleKey];
+  const a = bucket[dayA] || [];
+  const b = bucket[dayB] || [];
+  if (b.length) bucket[dayA] = b; else delete bucket[dayA];
+  if (a.length) bucket[dayB] = a; else delete bucket[dayB];
 }
 
 /**
@@ -3085,37 +3368,39 @@ function removeExerciseForRestOfCycle(dayKey, exId) {
  * beyond not persisting a removal.
  */
 function openExerciseRemovalPrompt(dayKey, exId, exName, onCancelRestoreCheckbox) {
+  if (state.viewingCycle !== state.cycle) {
+    toast(PAST_CYCLE_EDIT_MESSAGE);
+    if (onCancelRestoreCheckbox) onCancelRestoreCheckbox();
+    return;
+  }
+  const todayBlocked = exerciseHasLoggedData(dayKey, exId, state.week, state.viewingCycle);
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.style.alignItems = 'center';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
   sheet.style.cssText = 'border-radius:20px;max-width:400px;margin:0 auto;';
-  sheet.innerHTML = '<h3>Remove ' + exName + '?</h3><div class="modal-sub">Choose how this removal should apply.</div>';
-
+  sheet.innerHTML = '<h3>Remove ' + exName + '?</h3><div class="modal-sub">Choose how this removal should apply. Logged entries are never deleted.</div>';
   const todayOnlyBtn = document.createElement('button');
   todayOnlyBtn.className = 'goal-btn';
-  todayOnlyBtn.style.cssText = 'text-align:center;';
-  todayOnlyBtn.innerHTML = 'Remove from This Workout Only<div class="desc">Only today\u2019s workout is affected \u2014 future weeks are unchanged</div>';
+  todayOnlyBtn.style.cssText = 'text-align:center;' + (todayBlocked ? 'opacity:0.5;' : '');
+  todayOnlyBtn.disabled = todayBlocked;
+  todayOnlyBtn.innerHTML = 'Remove from This Workout Only<div class="desc">' +
+    (todayBlocked ? 'Unavailable: this exercise already has logged data this week' : 'Only this week’s workout is affected. Future weeks are unchanged') + '</div>';
   todayOnlyBtn.onclick = function() {
     document.body.removeChild(overlay);
-    const day = getEffectiveDay(dayKey);
-    const exIndex = (day.exerciseIds || []).indexOf(exId);
-    if (exIndex === -1) { render(); return; }
-    removeExerciseForToday(dayKey, exIndex);
+    removeExerciseForToday(dayKey, exId);
   };
   sheet.appendChild(todayOnlyBtn);
-
   const restOfCycleBtn = document.createElement('button');
   restOfCycleBtn.className = 'goal-btn';
   restOfCycleBtn.style.cssText = 'text-align:center;';
-  restOfCycleBtn.innerHTML = 'Remove for the Rest of This Cycle<div class="desc">Removes it from eligible future unstarted weeks in the current cycle only</div>';
+  restOfCycleBtn.innerHTML = 'Remove for the Rest of This Cycle<div class="desc">Removes it from unstarted weeks in this cycle. Completed and logged weeks are not changed</div>';
   restOfCycleBtn.onclick = function() {
     document.body.removeChild(overlay);
     removeExerciseForRestOfCycle(dayKey, exId);
   };
   sheet.appendChild(restOfCycleBtn);
-
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'modal-close';
   cancelBtn.textContent = 'Cancel';
@@ -3124,49 +3409,52 @@ function openExerciseRemovalPrompt(dayKey, exId, exName, onCancelRestoreCheckbox
     if (onCancelRestoreCheckbox) onCancelRestoreCheckbox();
   };
   sheet.appendChild(cancelBtn);
-
   overlay.appendChild(sheet);
-  overlay.onclick = function(e) { if (e.target === overlay && onCancelRestoreCheckbox) { onCancelRestoreCheckbox(); document.body.removeChild(overlay); } };
+  overlay.onclick = function(e) {
+    if (e.target === overlay) {
+      document.body.removeChild(overlay);
+      if (onCancelRestoreCheckbox) onCancelRestoreCheckbox();
+    }
+  };
   document.body.appendChild(overlay);
 }
 
-function openSwapModal(dayKey, exIndex) {
+function openSwapModal(dayKey, exId) {
+  if (state.viewingCycle !== state.cycle) { toast(PAST_CYCLE_EDIT_MESSAGE); return; }
   const day = getEffectiveDay(dayKey);
-  const currentExId = day.exerciseIds[exIndex];
-  // BATCH 2 FIX (root cause 3): guard against a stale/missing exercise id, which
-  // previously threw here with no guard and made the Swap button appear to do
-  // nothing at all when tapped from the defensive fallback card.
-  if (!exerciseLibrary[currentExId]) {
-    toast('This exercise is no longer available. Use Remove instead.');
-    return;
-  }
-  const alreadyInDay = day.exerciseIds.filter(function(id, idx) { return idx !== exIndex; });
-  const options = getSwapAlternatives(currentExId, dayKey, alreadyInDay);
-
+  if (!day || day.rest || (day.exerciseIds || []).indexOf(exId) === -1) { render(); return; }
+  if (!exerciseLibrary[exId]) { toast('This exercise is no longer available. Use Remove instead.'); return; }
+  const exName = exerciseLibrary[exId].name;
+  const alreadyInDay = day.exerciseIds.filter(function(id) { return id !== exId; });
+  const logged = exerciseHasLoggedData(dayKey, exId, state.week, state.viewingCycle);
+  const options = logged ? [] : getSwapAlternatives(exId, dayKey, alreadyInDay);
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
   sheet.className = 'modal-sheet';
-
-  if (options.length === 0) {
-    // No legitimate alternative exists - per spec, offer Remove for Today /
-    // Remove for This Program instead of silently deleting or padding the
-    // list with a poor substitute.
-    sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">No genuinely appropriate alternative is available for this exercise right now, given your equipment and today\u2019s plan. You can remove it instead \u2014 nothing about your logged history is affected either way.</div>';
-    const removeTodayBtn = document.createElement('button');
-    removeTodayBtn.className = 'goal-btn';
-    removeTodayBtn.style.cssText = 'text-align:center;';
-    removeTodayBtn.innerHTML = 'Remove for Today<div class="desc">Only affects today \u2014 future weeks are unchanged</div>';
-    removeTodayBtn.onclick = function() { document.body.removeChild(overlay); removeExerciseForToday(dayKey, exIndex); };
-    sheet.appendChild(removeTodayBtn);
-    const removeProgramBtn = document.createElement('button');
-    removeProgramBtn.className = 'goal-btn';
-    removeProgramBtn.style.cssText = 'text-align:center;';
-    removeProgramBtn.innerHTML = 'Remove for This Program<div class="desc">Removes it from future unstarted weeks in this program</div>';
-    removeProgramBtn.onclick = function() { document.body.removeChild(overlay); removeExerciseForProgram(dayKey, exIndex); };
-    sheet.appendChild(removeProgramBtn);
+  function closeOverlay() { document.body.removeChild(overlay); }
+  function makeRemoveButtons() {
+    const todayBtn = document.createElement('button');
+    todayBtn.className = 'goal-btn';
+    todayBtn.style.cssText = 'text-align:center;';
+    todayBtn.innerHTML = 'Remove for Today<div class="desc">Only this week’s workout is affected</div>';
+    todayBtn.onclick = function() { closeOverlay(); removeExerciseForToday(dayKey, exId); };
+    sheet.appendChild(todayBtn);
+    const cycleBtn = document.createElement('button');
+    cycleBtn.className = 'goal-btn';
+    cycleBtn.style.cssText = 'text-align:center;';
+    cycleBtn.innerHTML = 'Remove for the Rest of This Cycle<div class="desc">Unstarted weeks in this cycle only</div>';
+    cycleBtn.onclick = function() { closeOverlay(); removeExerciseForRestOfCycle(dayKey, exId); };
+    sheet.appendChild(cycleBtn);
+  }
+  if (logged) {
+    sheet.innerHTML = '<h3>Swap ' + exName + '</h3><div class="modal-sub">This exercise already has logged data for this week, so it cannot be swapped or removed for today. Your logged entries stay exactly as recorded.</div>';
+    makeRemoveButtons();
+  } else if (options.length === 0) {
+    sheet.innerHTML = '<h3>Swap ' + exName + '</h3><div class="modal-sub">No genuinely appropriate alternative is available for this exercise right now, given your equipment and today’s plan. You can remove it instead. Nothing about your logged history is affected either way.</div>';
+    makeRemoveButtons();
   } else {
-    sheet.innerHTML = '<h3>Swap ' + exerciseLibrary[currentExId].name + '</h3><div class="modal-sub">Alternatives are matched by movement pattern and muscle group, filtered to your equipment, and exclude anything already in today\u2019s plan. Showing up to 5 options.</div>';
+    sheet.innerHTML = '<h3>Swap ' + exName + '</h3><div class="modal-sub">Alternatives are matched by movement pattern and muscle group, filtered to your equipment, and exclude anything already in today’s plan. Showing up to 5 options.</div>';
     options.forEach(function(optId) {
       const opt = document.createElement('div');
       opt.className = 'swap-option';
@@ -3191,49 +3479,24 @@ function openSwapModal(dayKey, exIndex) {
       const todayBtn = document.createElement('button');
       todayBtn.className = 'swap-btn today';
       todayBtn.textContent = 'Just Today';
-      // AUDIT FIX (item 4): this previously wrote directly to state.activePlan[dayKey].exerciseIds,
-      // identical to "Always" below - meaning "Just Today" permanently altered the underlying
-      // program and every future occurrence of this day, not just today's. It now uses the
-      // weeklyOverrides-based swapExerciseForToday, matching how removeExerciseForToday already
-      // correctly scopes its change to only the current day/week/cycle occurrence.
-      todayBtn.onclick = function() {
-        document.body.removeChild(overlay);
-        swapExerciseForToday(dayKey, exIndex, optId);
-      };
+      todayBtn.onclick = function() { closeOverlay(); swapExerciseForToday(dayKey, exId, optId); };
       btns.appendChild(todayBtn);
       const permBtn = document.createElement('button');
       permBtn.className = 'swap-btn permanent';
       permBtn.textContent = 'Always';
-      // BUG FIX: "Always" correctly updated state.activePlan, but if a weeklyOverrides snapshot
-      // already existed for the CURRENT day/week (e.g. left over from an earlier "Just Today" swap
-      // on a different exercise in this same workout), getEffectiveDay would keep returning that
-      // stale snapshot first, so the just-made "Always" change was invisible for today - it only
-      // took effect starting next week, once no override existed and activePlan was read directly.
-      // Fix: if a current-week override exists for this dayKey, patch its exerciseIds at the same
-      // index too, so today's view stays in sync with the underlying program change immediately,
-      // while any OTHER exercise's Just-Today override already present in that same day is left
-      // completely intact.
-      permBtn.onclick = function() {
-        state.activePlan[dayKey].exerciseIds[exIndex] = optId;
-        const ovKey = weekOverrideKey(state.viewingCycle, state.week);
-        if (state.weeklyOverrides && state.weeklyOverrides[ovKey] && state.weeklyOverrides[ovKey][dayKey] && state.weeklyOverrides[ovKey][dayKey].exerciseIds) {
-          state.weeklyOverrides[ovKey][dayKey].exerciseIds[exIndex] = optId;
-        }
-        saveState(); document.body.removeChild(overlay); render(); toast('Swapped going forward');
-      };
+      permBtn.onclick = function() { closeOverlay(); swapExerciseForever(dayKey, exId, optId); };
       btns.appendChild(permBtn);
       opt.appendChild(btns);
       sheet.appendChild(opt);
     });
   }
-
   const closeBtn = document.createElement('button');
   closeBtn.className = 'modal-close';
   closeBtn.textContent = 'Cancel';
-  closeBtn.onclick = function() { document.body.removeChild(overlay); };
+  closeBtn.onclick = function() { closeOverlay(); };
   sheet.appendChild(closeBtn);
   overlay.appendChild(sheet);
-  overlay.onclick = function(e) { if (e.target === overlay) document.body.removeChild(overlay); };
+  overlay.onclick = function(e) { if (e.target === overlay) closeOverlay(); };
   document.body.appendChild(overlay);
 }
 
@@ -3281,63 +3544,75 @@ function showScheduleChangeChoiceModal(onThisWeek, onAllFuture) {
   document.body.appendChild(overlay);
 }
 
+/* Renames a day-block id such as "__rest_mon__" to "__rest_tue__". Exercise ids are never touched,
+   so a custom exercise whose name contains a weekday abbreviation keeps its id. */
+function remapBlockId(id, fromDay, toDay) {
+  const suffix = '_' + fromDay + '__';
+  if (id.indexOf('__') === 0 && id.length > suffix.length && id.slice(-suffix.length) === suffix) {
+    return id.slice(0, -suffix.length) + '_' + toDay + '__';
+  }
+  return id;
+}
+
+/* Moves the CURRENT week's logged data (weights, done flags, steps, protein, optional extras)
+   between two workout days. Only the dayKey prefix and day-block ids are renamed. */
 function swapWeekDataBetweenDays(sourceDayKey, otherDayKey, cycle, week) {
   const suffix = '::c' + cycle + '::w' + week;
-  function remapExId(exId, fromDay, toDay) {
-    return exId.split(fromDay).join(toDay);
+  function targetOf(dk) {
+    if (dk === sourceDayKey) return otherDayKey;
+    if (dk === otherDayKey) return sourceDayKey;
+    return null;
   }
   const toMove = [];
   Object.keys(state.weights).forEach(function(k) {
-    if (k.indexOf(suffix) !== k.length - suffix.length) return;
+    if (k.slice(-suffix.length) !== suffix) return;
     const parts = k.split('::');
-    const dayKey = parts[0];
-    if (dayKey === sourceDayKey) {
-      const newExId = remapExId(parts[1], sourceDayKey, otherDayKey);
-      toMove.push({ oldKey: k, newKey: [otherDayKey, newExId, parts[2], parts[3]].join('::') });
-    } else if (dayKey === otherDayKey) {
-      const newExId = remapExId(parts[1], otherDayKey, sourceDayKey);
-      toMove.push({ oldKey: k, newKey: [sourceDayKey, newExId, parts[2], parts[3]].join('::') });
-    }
+    const target = targetOf(parts[0]);
+    if (!target) return;
+    const newExId = remapBlockId(parts[1], parts[0], target);
+    toMove.push({ oldKey: k, newKey: [target, newExId, parts[2], parts[3]].join('::') });
   });
   const savedValues = toMove.map(function(m) { return state.weights[m.oldKey]; });
   toMove.forEach(function(m) { delete state.weights[m.oldKey]; });
   toMove.forEach(function(m, i) { state.weights[m.newKey] = savedValues[i]; });
 
-  const proteinSuffix = '::c' + cycle + '::w' + week;
-  const proteinToMove = [];
+  const protein = [];
   Object.keys(state.proteinEntries).forEach(function(k) {
-    if (k.indexOf(proteinSuffix) !== k.length - proteinSuffix.length) return;
-    const dayKey = k.split('::')[0];
-    if (dayKey === sourceDayKey) proteinToMove.push({ oldKey: k, newKey: otherDayKey + proteinSuffix });
-    else if (dayKey === otherDayKey) proteinToMove.push({ oldKey: k, newKey: sourceDayKey + proteinSuffix });
+    if (k.slice(-suffix.length) !== suffix) return;
+    const dk = k.split('::')[0];
+    const target = targetOf(dk);
+    if (target) protein.push({ oldKey: k, newKey: target + suffix, value: state.proteinEntries[k] });
   });
-  const savedProtein = proteinToMove.map(function(m) { return state.proteinEntries[m.oldKey]; });
-  proteinToMove.forEach(function(m) { delete state.proteinEntries[m.oldKey]; });
-  proteinToMove.forEach(function(m, i) { state.proteinEntries[m.newKey] = savedProtein[i]; });
+  protein.forEach(function(m) { delete state.proteinEntries[m.oldKey]; });
+  protein.forEach(function(m) { state.proteinEntries[m.newKey] = m.value; });
+
+  const history = loadOptionalHistory();
+  const srcKey = optionalDayKey(sourceDayKey, cycle, week);
+  const othKey = optionalDayKey(otherDayKey, cycle, week);
+  const srcList = history[srcKey];
+  const othList = history[othKey];
+  if (othList) history[srcKey] = othList; else delete history[srcKey];
+  if (srcList) history[othKey] = srcList; else delete history[othKey];
+  saveOptionalHistory(history);
 }
 
 function applyDaySwapThisWeekOnly(sourceDayKey, otherKey) {
+  if (state.viewingCycle !== state.cycle) { toast(PAST_CYCLE_EDIT_MESSAGE); return; }
   const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
-  const sourceOwnDayName = dayKeyToName[sourceDayKey];
-  const otherOwnDayName = dayKeyToName[otherKey];
-  const sourceCurrent = getEffectiveDay(sourceDayKey);
-  const otherCurrent = getEffectiveDay(otherKey);
-  const sourceType = splitDayLabel(sourceCurrent.label).typePart;
-  const otherType = splitDayLabel(otherCurrent.label).typePart;
-
-  const newSourceContent = Object.assign({}, otherCurrent);
-  newSourceContent.label = sourceOwnDayName + ' ' + otherType;
-  const newOtherContent = Object.assign({}, sourceCurrent);
-  newOtherContent.label = otherOwnDayName + ' ' + sourceType;
-
+  const sourceCurrent = cloneDay(getEffectiveDay(sourceDayKey));
+  const otherCurrent = cloneDay(getEffectiveDay(otherKey));
+  const newSourceContent = Object.assign({}, otherCurrent, {
+    label: dayKeyToName[sourceDayKey] + ' ' + splitDayLabel(otherCurrent.label).typePart
+  });
+  const newOtherContent = Object.assign({}, sourceCurrent, {
+    label: dayKeyToName[otherKey] + ' ' + splitDayLabel(sourceCurrent.label).typePart
+  });
   const ovKey = weekOverrideKey(state.viewingCycle, state.week);
   if (!state.weeklyOverrides) state.weeklyOverrides = {};
   if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
   state.weeklyOverrides[ovKey][sourceDayKey] = newSourceContent;
   state.weeklyOverrides[ovKey][otherKey] = newOtherContent;
-
   swapWeekDataBetweenDays(sourceDayKey, otherKey, state.viewingCycle, state.week);
-
   state.day = sourceDayKey;
   saveState();
   render();
@@ -3345,22 +3620,35 @@ function applyDaySwapThisWeekOnly(sourceDayKey, otherKey) {
 }
 
 function applyDaySwapAllFutureWeeks(sourceDayKey, otherKey) {
+  if (state.viewingCycle !== state.cycle) { toast(PAST_CYCLE_EDIT_MESSAGE); return; }
   const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
-  const sourceOwnDayName = dayKeyToName[sourceDayKey];
-  const otherOwnDayName = dayKeyToName[otherKey];
-  const sourceOldContent = Object.assign({}, state.activePlan[sourceDayKey]);
-  const otherOldContent = Object.assign({}, state.activePlan[otherKey]);
-  const sourceOldType = splitDayLabel(sourceOldContent.label).typePart;
-  const otherOldType = splitDayLabel(otherOldContent.label).typePart;
-  const newSourceContent = Object.assign({}, otherOldContent);
-  newSourceContent.label = sourceOwnDayName + ' ' + otherOldType;
-  const newOtherContent = Object.assign({}, sourceOldContent);
-  newOtherContent.label = otherOwnDayName + ' ' + sourceOldType;
-  state.activePlan[sourceDayKey] = newSourceContent;
-  state.activePlan[otherKey] = newOtherContent;
-
+  // 1. Freeze earlier weeks so completed history keeps the workouts it was logged against.
+  freezePastWeeksForDays([sourceDayKey, otherKey]);
+  // 2. Current week: capture the effective workouts (including any override) before changing anything.
+  const sourceCurrent = cloneDay(getEffectiveDay(sourceDayKey));
+  const otherCurrent = cloneDay(getEffectiveDay(otherKey));
+  // 3. Future weeks: swap the program template, keeping each slot's weekday name.
+  const sourceBase = state.activePlan[sourceDayKey];
+  const otherBase = state.activePlan[otherKey];
+  state.activePlan[sourceDayKey] = Object.assign({}, otherBase, {
+    label: dayKeyToName[sourceDayKey] + ' ' + splitDayLabel(otherBase.label).typePart
+  });
+  state.activePlan[otherKey] = Object.assign({}, sourceBase, {
+    label: dayKeyToName[otherKey] + ' ' + splitDayLabel(sourceBase.label).typePart
+  });
+  // 4. Current week: show the swapped workout immediately, even if an override existed.
+  const ovKey = weekOverrideKey(state.cycle, state.week);
+  if (!state.weeklyOverrides) state.weeklyOverrides = {};
+  if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
+  state.weeklyOverrides[ovKey][sourceDayKey] = Object.assign({}, otherCurrent, {
+    label: dayKeyToName[sourceDayKey] + ' ' + splitDayLabel(otherCurrent.label).typePart
+  });
+  state.weeklyOverrides[ovKey][otherKey] = Object.assign({}, sourceCurrent, {
+    label: dayKeyToName[otherKey] + ' ' + splitDayLabel(sourceCurrent.label).typePart
+  });
+  // 5. Removal records and current-week logged data travel with the workout.
+  swapCycleRemovalRecords(sourceDayKey, otherKey);
   swapWeekDataBetweenDays(sourceDayKey, otherKey, state.viewingCycle, state.week);
-
   state.day = sourceDayKey;
   saveState();
   render();
@@ -3391,6 +3679,7 @@ function showCompletedDayWarning(dayLabel, onProceed) {
 }
 
 function openDaySwapModal(sourceDayKey) {
+  if (state.viewingCycle !== state.cycle) { toast(PAST_CYCLE_EDIT_MESSAGE); return; }
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const sheet = document.createElement('div');
@@ -3866,6 +4155,16 @@ function deleteCycle(cycleNum) {
   if (state.cycleExerciseRemovals) {
     delete state.cycleExerciseRemovals['c' + cycleNum];
   }
+  if (state.weeklyOverrides) {
+    Object.keys(state.weeklyOverrides).forEach(function(ovKey) {
+      if (ovKey.indexOf('c' + cycleNum + '-') === 0) delete state.weeklyOverrides[ovKey];
+    });
+  }
+  const optionalToClean = loadOptionalHistory();
+  Object.keys(optionalToClean).forEach(function(k) {
+    if (k.indexOf('::c' + cycleNum + '::') !== -1) delete optionalToClean[k];
+  });
+  saveOptionalHistory(optionalToClean);
 
   const cycleTag = 'c' + cycleNum + '-';
   state.celebratedDays = (state.celebratedDays || []).filter(function(k) { return k.indexOf(cycleTag) !== 0; });
@@ -5151,7 +5450,7 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     swapBtn.className = 'ex-btn';
     swapBtn.style.cssText = 'background:#eef3fb;border-color:#b9cdf0;color:#1c3a7a;margin-top:8px;';
     swapBtn.textContent = 'Swap';
-    swapBtn.onclick = function() { openSwapModal(dayKey, exIndex); };
+    swapBtn.onclick = function() { openSwapModal(dayKey, exId); };
     card.appendChild(swapBtn);
     return card;
   }
@@ -5163,7 +5462,9 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   const top = document.createElement('div');
   top.className = 'ex-top';
   const left = document.createElement('div');
-  left.innerHTML = '<p class="ex-name">' + (isPriority ? '\u2b50 ' : '') + ex.name + '</p><p class="ex-scheme">' + ex.scheme + '</p>';
+  const displayScheme = heavyStrengthSchemeFor(dayKey, exId, ex.scheme);
+  const isHeavy = displayScheme !== ex.scheme;
+  left.innerHTML = '<p class="ex-name">' + (isPriority ? '\u2b50 ' : '') + ex.name + '</p><p class="ex-scheme">' + displayScheme + (isHeavy ? ' \u00b7 Heavy Strength' : '') + '</p>';
   top.appendChild(left);
   const actions = document.createElement('div');
   actions.className = 'ex-actions';
@@ -5199,7 +5500,7 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   swapBtn.className = 'ex-btn';
   swapBtn.style.cssText = 'background:#eef3fb;border-color:#b9cdf0;color:#1c3a7a;';
   swapBtn.textContent = 'Swap';
-  swapBtn.onclick = function() { openSwapModal(dayKey, exIndex); };
+  swapBtn.onclick = function() { openSwapModal(dayKey, exId); };
   actions.appendChild(swapBtn);
   top.appendChild(actions);
   card.appendChild(top);
