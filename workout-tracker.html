@@ -259,12 +259,18 @@ const PAST_CYCLE_EDIT_MESSAGE = 'Past cycles are read-only. Switch to your curre
 
 function cloneDay(day) { return JSON.parse(JSON.stringify(day)); }
 
-/* True if ANY logged value (weight, done flag, steps, mobility, etc.) exists for this day/week/cycle. */
+/* True if any EXERCISE in this workout occurrence has logged data. Day-level entries (warm-up,
+   cardio, steps, rest) are deliberately ignored, so ticking a warm-up box never counts as
+   "exercise started" and never changes anything else. */
 function dayHasLoggedData(dayKey, week, cycle) {
+  const mode = getOccurrenceMode(dayKey, week, cycle);
+  const map = mode === 'heavy' ? (state.heavyWeights || {}) : state.weights;
   const suffix = '::c' + cycle + '::w' + week;
   const prefix = dayKey + '::';
-  return Object.keys(state.weights).some(function(k) {
-    return k.indexOf(prefix) === 0 && k.indexOf('::__steps__::') === -1 && k.length > suffix.length && k.slice(-suffix.length) === suffix && !!state.weights[k];
+  return Object.keys(map).some(function(k) {
+    if (k.indexOf(prefix) !== 0 || !map[k] || k.slice(-suffix.length) !== suffix) return false;
+    const exId = k.slice(prefix.length, k.length - suffix.length);
+    return !isDayBlockId(exId);
   });
 }
 
@@ -360,7 +366,10 @@ let state = {
   programPriority: null,
   weeklyOverrides: {},
   currentFocusAreas: [],
-  cycleExerciseRemovals: {}
+  cycleExerciseRemovals: {},
+  heavyDays: {},
+  occurrenceModes: {},
+  heavyWeights: {}
 };
 
 const GRAPH_PREFS_KEY = 'workout-graph-prefs-v1';
@@ -1313,6 +1322,7 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
     Object.keys(exerciseLibrary).forEach(function(exId) {
       const m = exerciseLibrary[exId].muscle;
       if (m === 'yoga') return;
+      if (exerciseLibrary[exId].altOnly) return;
       if (goalKey === 'improve_mobility' && !exerciseLibrary[exId].isMobility) return;
       if (!muscles[m]) muscles[m] = [];
       muscles[m].push(exId);
@@ -1326,6 +1336,7 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
     Object.keys(exerciseLibrary).forEach(function(exId) {
       const m = exerciseLibrary[exId].muscle;
       if (m === 'cardio' || m === 'yoga') return;
+      if (exerciseLibrary[exId].altOnly) return;
       if (!muscles[m]) muscles[m] = [];
       muscles[m].push(exId);
     });
@@ -1345,6 +1356,7 @@ function getMusclePoolForTemplate(goalKey, subgoalKey) {
     Object.keys(exerciseLibrary).forEach(function(exId) {
       const m = exerciseLibrary[exId].muscle;
       if (m === 'cardio' || m === 'yoga') return;
+      if (exerciseLibrary[exId].altOnly) return;
       if (!muscles[m]) muscles[m] = [];
       muscles[m].push(exId);
     });
@@ -1792,7 +1804,7 @@ function generatePersonalizedProgram() {
   state.goal = goalKey;
   state.selectedGoal = goalKey;
   state.selectedSubgoal = subgoalKey;
-  state.heavyStrength = null;
+  state.heavyDays = {};
   state.activePlan = newActivePlan;
   state.programLength = answers.programLength;
   state.programRecoveryPref = answers.recovery;
@@ -2072,6 +2084,93 @@ const equipmentTagAllowedFor = {
   bodyweight: ['full_gym', 'planet_fitness', 'home_gym', 'bodyweight_only', 'dumbbells_only']
 };
 
+/* =========================================================
+   Expanded exercise alternatives (batch 3)
+   Every entry is a real, distinct exercise, grouped by movement pattern. altOnly: true keeps it
+   OUT of automatic program generation (it is used by Swap and by the optional-exercise list only).
+   Equipment tags are checked against the user's equipment answer. Planet Fitness is treated as
+   selectorized machines, cable towers, Smith machines, dumbbells, and bodyweight; barbell (Olympic bars and racks) is full-gym and home only.
+   ========================================================= */
+const batch3NewExercises = {
+  smith_bench_press: { name: 'Smith machine bench press', muscle: 'chest', scheme: '3 x 10', link: YT('smith machine bench press proper form'), equipment: 'smith', altOnly: true },
+  smith_incline_press: { name: 'Smith machine incline press', muscle: 'chest', scheme: '3 x 10', link: YT('smith machine incline press proper form'), equipment: 'smith', altOnly: true },
+  barbell_bench_press: { name: 'Barbell bench press', muscle: 'chest', scheme: '3 x 8', link: YT('barbell bench press proper form'), equipment: 'barbell', altOnly: true },
+  incline_chest_press_machine: { name: 'Incline chest press machine', muscle: 'chest', scheme: '3 x 10', link: YT('incline chest press machine proper form'), equipment: 'machine', altOnly: true },
+  dumbbell_floor_press: { name: 'Dumbbell floor press', muscle: 'chest', scheme: '3 x 10', link: YT('dumbbell floor press proper form'), equipment: 'dumbbell', altOnly: true },
+  smith_shoulder_press: { name: 'Smith machine shoulder press', muscle: 'shoulders', scheme: '3 x 10', link: YT('smith machine shoulder press proper form'), equipment: 'smith', altOnly: true },
+  standing_barbell_press: { name: 'Standing barbell overhead press', muscle: 'shoulders', scheme: '3 x 8', link: YT('standing barbell overhead press proper form'), equipment: 'barbell', altOnly: true },
+  machine_lateral_raise: { name: 'Lateral raise machine', muscle: 'shoulders', scheme: '3 x 12', link: YT('lateral raise machine proper form'), equipment: 'machine', altOnly: true },
+  bent_over_db_rear_delt_raise: { name: 'Bent-over dumbbell rear delt raise', muscle: 'shoulders', scheme: '3 x 12', link: YT('bent over dumbbell rear delt raise form'), equipment: 'dumbbell', altOnly: true },
+  band_pull_apart: { name: 'Band pull-apart', muscle: 'shoulders', scheme: '3 x 15', link: YT('band pull apart proper form'), noWeight: true, equipment: 'resistance_band', altOnly: true },
+  dumbbell_skullcrusher: { name: 'Dumbbell lying triceps extension', muscle: 'triceps', scheme: '3 x 12', link: YT('dumbbell lying triceps extension form'), equipment: 'dumbbell', altOnly: true },
+  ez_bar_skullcrusher: { name: 'EZ-bar lying triceps extension', muscle: 'triceps', scheme: '3 x 10', link: YT('ez bar lying triceps extension form'), equipment: 'barbell', altOnly: true },
+  pull_up: { name: 'Pull-up', muscle: 'back', scheme: '3 x 6', link: YT('pull up proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  assisted_pullup: { name: 'Assisted pull-up machine', muscle: 'back', scheme: '3 x 8', link: YT('assisted pull up machine proper form'), equipment: 'machine', altOnly: true },
+  dumbbell_row: { name: 'Single-arm dumbbell row', muscle: 'back', scheme: '3 x 10', link: YT('single arm dumbbell row proper form'), equipment: 'dumbbell', altOnly: true },
+  barbell_bent_over_row: { name: 'Barbell bent-over row', muscle: 'back', scheme: '3 x 8', link: YT('barbell bent over row proper form'), equipment: 'barbell', altOnly: true },
+  tbar_row: { name: 'T-bar row machine', muscle: 'back', scheme: '3 x 10', link: YT('t bar row machine proper form'), equipment: 'machine', altOnly: true },
+  machine_preacher_curl: { name: 'Preacher curl machine', muscle: 'biceps', scheme: '3 x 12', link: YT('preacher curl machine proper form'), equipment: 'machine', altOnly: true },
+  dumbbell_rdl: { name: 'Dumbbell Romanian deadlift', muscle: 'legs_posterior', scheme: '3 x 10', link: YT('dumbbell romanian deadlift proper form'), equipment: 'dumbbell', altOnly: true },
+  barbell_rdl: { name: 'Barbell Romanian deadlift', muscle: 'legs_posterior', scheme: '3 x 8', link: YT('barbell romanian deadlift proper form'), equipment: 'barbell', altOnly: true },
+  hip_thrust_machine: { name: 'Hip thrust machine', muscle: 'legs_posterior', scheme: '3 x 12', link: YT('hip thrust machine proper form'), equipment: 'machine', altOnly: true },
+  smith_squat: { name: 'Smith machine squat', muscle: 'legs_general', scheme: '3 x 10', link: YT('smith machine squat proper form'), equipment: 'smith', altOnly: true },
+  barbell_back_squat: { name: 'Barbell back squat', muscle: 'legs_general', scheme: '3 x 8', link: YT('barbell back squat proper form'), equipment: 'barbell', altOnly: true },
+  hack_squat_machine: { name: 'Hack squat machine', muscle: 'legs_general', scheme: '3 x 10', link: YT('hack squat machine proper form'), equipment: 'machine', altOnly: true },
+  reverse_lunge: { name: 'Reverse lunge', muscle: 'legs_general', scheme: '2 x 12 each leg', link: YT('reverse lunge proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  bulgarian_split_squat: { name: 'Bulgarian split squat', muscle: 'legs_general', scheme: '2 x 10 each leg', link: YT('bulgarian split squat proper form'), equipment: 'dumbbell', altOnly: true },
+  dumbbell_step_up: { name: 'Dumbbell step-up', muscle: 'legs_general', scheme: '2 x 10 each leg', link: YT('dumbbell step up proper form'), equipment: 'dumbbell', altOnly: true },
+  lying_leg_curl: { name: 'Lying leg curl machine', muscle: 'legs_posterior', scheme: '3 x 12', link: YT('lying leg curl machine proper form'), equipment: 'machine', altOnly: true },
+  stability_ball_leg_curl: { name: 'Stability ball leg curl', muscle: 'legs_posterior', scheme: '3 x 12', link: YT('stability ball leg curl proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  seated_calf_raise: { name: 'Seated calf raise machine', muscle: 'calves', scheme: '3 x 15', link: YT('seated calf raise machine proper form'), equipment: 'machine', altOnly: true },
+  leg_press_calf_raise: { name: 'Leg press calf raise', muscle: 'calves', scheme: '3 x 15', link: YT('leg press calf raise proper form'), equipment: 'machine', altOnly: true },
+  cable_hip_abduction: { name: 'Cable hip abduction', muscle: 'legs_posterior', scheme: '3 x 15', link: YT('cable hip abduction proper form'), equipment: 'cable', altOnly: true },
+  banded_lateral_walk: { name: 'Banded lateral walk', muscle: 'legs_posterior', scheme: '2 x 12 each side', link: YT('banded lateral walk proper form'), noWeight: true, equipment: 'resistance_band', altOnly: true },
+  cable_hip_adduction: { name: 'Cable hip adduction', muscle: 'legs_posterior', scheme: '3 x 15', link: YT('cable hip adduction proper form'), equipment: 'cable', altOnly: true },
+  dead_bug: { name: 'Dead bug', muscle: 'core', scheme: '3 x 10 each side', link: YT('dead bug exercise proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  side_plank: { name: 'Side plank', muscle: 'core', scheme: '3 x 30 sec each side', link: YT('side plank proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  pallof_press: { name: 'Pallof press', muscle: 'core', scheme: '3 x 12 each side', link: YT('pallof press proper form'), equipment: 'cable', altOnly: true },
+  russian_twist: { name: 'Russian twist', muscle: 'core', scheme: '3 x 20', link: YT('russian twist proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  cable_crunch: { name: 'Kneeling cable crunch', muscle: 'core', scheme: '3 x 12', link: YT('kneeling cable crunch proper form'), equipment: 'cable', altOnly: true },
+  bodyweight_crunch: { name: 'Floor crunch', muscle: 'core', scheme: '3 x 15', link: YT('floor crunch proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  hanging_knee_raise: { name: 'Hanging knee raise', muscle: 'core', scheme: '3 x 10', link: YT('hanging knee raise proper form'), noWeight: true, equipment: 'bodyweight', altOnly: true },
+  suitcase_carry: { name: 'Suitcase carry', muscle: 'core', scheme: '3 x 45 sec each side', link: YT('suitcase carry proper form'), noWeight: true, equipment: 'dumbbell', altOnly: true }
+};
+
+/* Movement pattern for each new exercise, and the corrected patterns for the two hip machines.
+   Abductor and adductor were previously one shared pattern, which could offer the opposite motion. */
+const batch3MovementPatterns = {
+  smith_bench_press: 'horizontal_press', smith_incline_press: 'horizontal_press', barbell_bench_press: 'horizontal_press',
+  incline_chest_press_machine: 'horizontal_press', dumbbell_floor_press: 'horizontal_press',
+  smith_shoulder_press: 'vertical_press', standing_barbell_press: 'vertical_press',
+  machine_lateral_raise: 'lateral_raise',
+  bent_over_db_rear_delt_raise: 'rear_delt', band_pull_apart: 'rear_delt',
+  dumbbell_skullcrusher: 'triceps_isolation', ez_bar_skullcrusher: 'triceps_isolation',
+  pull_up: 'vertical_pull', assisted_pullup: 'vertical_pull',
+  dumbbell_row: 'horizontal_pull', barbell_bent_over_row: 'horizontal_pull', tbar_row: 'horizontal_pull',
+  machine_preacher_curl: 'curl',
+  dumbbell_rdl: 'hip_hinge', barbell_rdl: 'hip_hinge', hip_thrust_machine: 'hip_hinge',
+  smith_squat: 'squat_pattern', barbell_back_squat: 'squat_pattern', hack_squat_machine: 'squat_pattern',
+  reverse_lunge: 'lunge_pattern', bulgarian_split_squat: 'lunge_pattern', dumbbell_step_up: 'lunge_pattern',
+  lying_leg_curl: 'leg_curl_isolation', stability_ball_leg_curl: 'leg_curl_isolation',
+  seated_calf_raise: 'calf_raise', leg_press_calf_raise: 'calf_raise',
+  hip_abductor: 'hip_abduction', cable_hip_abduction: 'hip_abduction', banded_lateral_walk: 'hip_abduction',
+  hip_adductor: 'hip_adduction', cable_hip_adduction: 'hip_adduction',
+  dead_bug: 'core_stability', side_plank: 'core_stability',
+  pallof_press: 'core_rotation', russian_twist: 'core_rotation',
+  cable_crunch: 'core_flexion', bodyweight_crunch: 'core_flexion', hanging_knee_raise: 'core_flexion',
+  suitcase_carry: 'loaded_carry'
+};
+
+/* Equipment tags. Tag lists are conservative: anything not clearly common at Planet Fitness
+   is limited to full gyms. */
+const batch3EquipmentTags = {
+  machine: ['full_gym', 'planet_fitness'],
+  cable: ['full_gym', 'planet_fitness'],
+  smith: ['full_gym', 'planet_fitness'],
+  barbell: ['full_gym', 'home_gym'],
+  dumbbell: ['full_gym', 'planet_fitness', 'home_gym', 'dumbbells_only']
+};
+
 async function loadProgramData() {
   const bannerContainer = document.getElementById('app');
   try {
@@ -2085,6 +2184,12 @@ async function loadProgramData() {
     // substitution pool (see movementPatternMap comment above). Never touches
     // programData.json; purely additive, same mechanism as version11NewExercises.
     Object.assign(exerciseLibrary, batch2NewExercises);
+    Object.assign(exerciseLibrary, batch3NewExercises);
+    Object.assign(movementPatternMap, batch3MovementPatterns);
+    Object.assign(equipmentTagAllowedFor, batch3EquipmentTags);
+    /* Equipment tags for earlier batch-2 exercises that had none (so they were allowed on every setting). */
+    ['seated_barbell_press', 'barbell_curl', 'ez_bar_curl'].forEach(function(id) { if (exerciseLibrary[id]) exerciseLibrary[id].equipment = 'barbell'; });
+    if (exerciseLibrary.arnold_press) exerciseLibrary.arnold_press.equipment = 'dumbbell';
     Object.keys(exerciseLibrary).forEach(function(id) {
       const m = exerciseLibrary[id].muscle;
       if (!substituteGroups[m]) substituteGroups[m] = [];
@@ -2111,6 +2216,7 @@ async function loadState() {
     if (raw) {
       state = Object.assign({}, state, JSON.parse(raw));
       migrateToPerDayKeys();
+      migrateHeavyStrengthSettings();
     }
   } catch (e) {}
   /* BUG FIX: legacy programs created before state.currentFocusAreas existed would show every
@@ -2162,7 +2268,7 @@ const tutorialSlides = [
   },
   {
     title: 'Heavy Strength (optional)',
-    body: 'Find it under Admin, in Training Preferences. Turn on Heavy Strength, then choose 1 day a week, 2 days a week, or Custom days and pick the days. On those days, main lifts move to heavier ranges (4–6 reps for primary lifts, 6–8 for secondary), accessory lifts to 8–12, and isolation moves to 10–15. Your sets stay the same and you choose your own weights. Only unstarted workouts change. Pause or remove it any time, and your original workouts come back.',
+    body: 'Open Admin and go to Training Preferences. Turn Heavy Strength ON or OFF for each workout day, so you can use it on one day and not another. On an ON day, a workout that has not started uses heavier targets: primary lifts 5 reps, secondary lifts 6, accessory lifts 8, and isolation moves 10. Your sets stay the same, cardio and stretches never change, and the day\u2019s exercises show "Heavy Strength." Turning it OFF returns future unstarted workouts to normal. A workout you have already started keeps the mode it began with.',
     mock: ''
   },
   {
@@ -2172,7 +2278,7 @@ const tutorialSlides = [
   },
   {
     title: 'Swap what does not work',
-    body: 'Tap Swap on any exercise to choose a replacement for the same movement. "Just Today" changes this week only. "Always" changes future weeks. You can also swap an entire day with another day, either for this week only or for all future weeks. Exercises that already have logged data this week cannot be swapped, and completed weeks never change.',
+    body: 'Tap Swap on any exercise to choose a replacement that does the same movement and fits your equipment. Some exercises have only a few options, and some have none, in which case you can remove the exercise instead. "Just Today" changes this week only. "Always" changes future weeks. You can also swap an entire day with another day, either for this week only or for all future weeks. Exercises that already have logged data this week cannot be swapped, and completed weeks never change.',
     mock: '<div style="padding:16px;"><div class="ex-top"><div><p class="ex-name">Leg press</p><p class="ex-scheme">3 x 12</p></div><div class="ex-actions"><button class="ex-btn" style="pointer-events:none;">Swap</button></div></div><button style="width:100%;padding:10px;background:#eef3fb;border:1px solid #b9cdf0;color:#1c3a7a;border-radius:10px;font-size:13px;font-weight:600;margin-top:14px;" disabled>Swap this day with another day</button></div>'
   },
   {
@@ -2187,7 +2293,7 @@ const tutorialSlides = [
   },
   {
     title: 'Weight progression',
-    body: 'Enter the weight you used each session. A suggestion card appears only when your logged weights show a clear pattern. Three sessions in a row at the same weight can prompt a small increase. A steady drop over three sessions prompts a lighter session or rest. After a weight increase, the app waits for performance to settle before suggesting another. The app tracks logged weights, not reps, and you always choose your own weight.',
+    body: 'Enter the weight you used at each session. The box always starts blank. Under each exercise you see your last logged weight as reference only. A suggestion appears only when your logged weights show a clear pattern: three sessions in a row at the same weight can prompt a small increase, and a steady drop over three sessions prompts a lighter session or rest. Heavy Strength keeps its own history. Its first weight is a suggestion based on your last normal lift, and after that its suggestions use only your Heavy Strength entries. The app tracks weights, not reps, so you decide what is right for you.',
     mock: ''
   },
   {
@@ -2334,196 +2440,174 @@ function renderTutorialTab(container) {
 }
 
 /* =========================================================
-   STAGE 2: Heavy Strength (Training Preferences)
-   A reversible display overlay. It never edits activePlan, weeklyOverrides, or logs.
-   Only unstarted workouts on the selected days in the current cycle are affected.
+   Heavy Strength - per workout day, reversible
+   state.heavyDays[dayKey] = true means that day uses Heavy Strength.
+   Its workouts get heavier targets until they are started. The mode of
+   a started workout is frozen in state.occurrenceModes, so ticking boxes,
+   swapping, removing or navigating can never switch it.
+   Heavy exercise weights are stored in state.heavyWeights, normal ones in
+   state.weights, so the two histories never mix.
    ========================================================= */
-const HEAVY_STRENGTH_TIERS = {
-  primary: [4, 6], secondary: [6, 8], accessory: [8, 12], isolation: [10, 15]
-};
-const HEAVY_STRENGTH_EXERCISE_TIER = {
+const HEAVY_STRENGTH_TARGET_REPS = { primary: 5, secondary: 6, accessory: 8, isolation: 10 };
+const HEAVY_STRENGTH_INCREMENT = { primary: 5, secondary: 5, accessory: 2.5, isolation: 2.5 };
+/* Exercises not listed here (cardio, mobility, yoga, plank, carries, lunges, bodyweight,
+   custom exercises) keep their normal prescription on Heavy Strength days. */
+const HEAVY_STRENGTH_TIER = {
   leg_press: 'primary', chest_press_machine: 'primary', shoulder_press_machine: 'primary',
-  smith_rdl: 'primary', smith_hip_thrust: 'primary', seated_barbell_press: 'primary',
-  incline_db_press: 'secondary', flat_db_press: 'secondary', db_shoulder_press: 'secondary',
-  goblet_squat: 'secondary', seated_cable_row: 'secondary', chest_supported_row: 'secondary',
-  cable_chest_press: 'secondary', arnold_press: 'secondary',
-  lat_pulldown: 'accessory', straight_arm_pulldown: 'accessory', seated_leg_curl: 'accessory',
-  leg_extension: 'accessory', calf_raise_machine: 'accessory', hip_abductor: 'accessory', hip_adductor: 'accessory',
+  smith_hip_thrust: 'primary', seated_barbell_press: 'primary',
+  smith_rdl: 'secondary', incline_db_press: 'secondary', flat_db_press: 'secondary',
+  db_shoulder_press: 'secondary', goblet_squat: 'secondary', seated_cable_row: 'secondary',
+  chest_supported_row: 'secondary', cable_chest_press: 'secondary', arnold_press: 'secondary',
+  lat_pulldown: 'secondary',
+  seated_leg_curl: 'accessory', leg_extension: 'accessory', calf_raise_machine: 'accessory',
+  hip_abductor: 'accessory', hip_adductor: 'accessory', straight_arm_pulldown: 'accessory',
   cable_lateral_raise: 'isolation', db_lateral_raise: 'isolation', rear_delt_pec_deck: 'isolation',
   face_pull: 'isolation', triceps_pushdown: 'isolation', triceps_kickback: 'isolation',
-  overhead_triceps_ext: 'isolation', hammer_curl: 'isolation', cable_curl: 'isolation', db_curl: 'isolation',
-  barbell_curl: 'isolation', ez_bar_curl: 'isolation', ab_crunch_machine: 'isolation',
-  torso_rotation: 'isolation', cable_woodchop: 'isolation'
+  overhead_triceps_ext: 'isolation', hammer_curl: 'isolation', cable_curl: 'isolation',
+  db_curl: 'isolation', barbell_curl: 'isolation', ez_bar_curl: 'isolation',
+  ab_crunch_machine: 'isolation', torso_rotation: 'isolation', cable_woodchop: 'isolation',
+  barbell_bench_press: 'primary', barbell_back_squat: 'primary', hack_squat_machine: 'primary',
+  smith_bench_press: 'primary', smith_squat: 'primary', barbell_rdl: 'secondary',
+  standing_barbell_press: 'secondary', dumbbell_rdl: 'secondary', barbell_bent_over_row: 'secondary',
+  tbar_row: 'secondary', dumbbell_row: 'secondary', dumbbell_skullcrusher: 'isolation', ez_bar_skullcrusher: 'isolation'
 };
 
-function heavyStrengthMaxDays(mode) {
-  if (mode === 'one') return 1;
-  if (mode === 'two') return 2;
-  return 99;
-}
-
-function getWorkoutDayKeysForHeavy() {
-  if (!state.activePlan) return [];
-  return getOrderedDayKeys().filter(function(k) { return !state.activePlan[k].rest; });
-}
-
-/* True only for a selected day that is unstarted, in the current cycle, and not in a past week. */
-function isHeavyStrengthDay(dayKey, week, cycle) {
-  const hs = state.heavyStrength;
-  if (!hs || !hs.enabled || !hs.days || hs.days.indexOf(dayKey) === -1) return false;
-  if (cycle !== state.cycle || week < state.week) return false;
-  const day = state.activePlan && state.activePlan[dayKey];
-  if (!day || day.rest) return false;
-  return !dayHasLoggedData(dayKey, week, cycle);
-}
-
-/* Returns the scheme to DISPLAY. Sets are kept; only the rep range changes, per exercise tier. */
+/* Displayed prescription. Changes only the rep target; sets are kept. */
 function heavyStrengthSchemeFor(dayKey, exId, originalScheme) {
-  if (!isHeavyStrengthDay(dayKey, state.week, state.viewingCycle)) return originalScheme;
-  const tier = HEAVY_STRENGTH_EXERCISE_TIER[exId];
+  if (!originalScheme) return originalScheme;
+  if (getOccurrenceMode(dayKey, state.week, state.viewingCycle) !== 'heavy') return originalScheme;
+  const tier = HEAVY_STRENGTH_TIER[exId];
   if (!tier) return originalScheme;
-  const m = (originalScheme || '').match(/^(\d+)\s*x\s*/);
+  const m = String(originalScheme).match(/^(\d+)\s*x\s*/);
   if (!m) return originalScheme;
-  const range = HEAVY_STRENGTH_TIERS[tier];
-  return m[1] + ' x ' + range[0] + '-' + range[1];
+  return m[1] + ' x ' + HEAVY_STRENGTH_TARGET_REPS[tier];
 }
 
-function enableHeavyStrength() {
-  if (!state.activePlan) return;
-  const workoutDays = getWorkoutDayKeysForHeavy();
-  if (workoutDays.length === 0) { toast('No workout days to apply Heavy Strength to'); return; }
-  state.heavyStrength = { enabled: true, mode: 'one', days: [workoutDays[0]] };
-  saveState();
-  render();
-  toast('Heavy Strength on');
+/* Starting weight for Heavy Strength: only until Heavy Strength history exists for the exercise.
+   Based on the most recent NORMAL logged weight for that exercise (by date). */
+function heavyStrengthStartingSuggestion(exId) {
+  if (getAllEntriesForExercise(exId, 'heavy').length > 0) return null;
+  const normal = getLatestEntry(exId, 'normal');
+  if (!normal) return { insufficient: true };
+  const tier = HEAVY_STRENGTH_TIER[exId];
+  const inc = tier ? HEAVY_STRENGTH_INCREMENT[tier] : 5;
+  return { lastNormal: normal.weight, date: normal.date, suggested: Math.round((normal.weight + inc) * 10) / 10 };
 }
 
-function resumeHeavyStrength() {
-  if (!state.heavyStrength) return;
-  state.heavyStrength.enabled = true;
-  saveState();
-  render();
-  toast('Heavy Strength resumed');
-}
-
-function disableHeavyStrength() {
-  if (!state.heavyStrength) return;
-  state.heavyStrength.enabled = false;
-  saveState();
-  render();
-  toast('Heavy Strength paused');
-}
-
-function removeHeavyStrength() {
-  if (!confirm('Remove Heavy Strength? Future unstarted workouts return to their original programming. Your logged data is not affected.')) return;
-  state.heavyStrength = null;
-  saveState();
-  render();
-  toast('Heavy Strength removed');
-}
-
-function setHeavyStrengthMode(mode) {
-  if (!state.heavyStrength) return;
-  const max = heavyStrengthMaxDays(mode);
-  const workoutDays = getWorkoutDayKeysForHeavy();
-  let days = state.heavyStrength.days.filter(function(k) { return workoutDays.indexOf(k) !== -1; }).slice(0, max);
-  if (days.length === 0 && workoutDays.length > 0) days = [workoutDays[0]];
-  state.heavyStrength.mode = mode;
-  state.heavyStrength.days = days;
-  saveState();
-  render();
-}
-
-function toggleHeavyStrengthDay(dayKey) {
-  if (!state.heavyStrength) return;
-  const hs = state.heavyStrength;
-  const max = heavyStrengthMaxDays(hs.mode);
-  let days = hs.days.slice();
-  const idx = days.indexOf(dayKey);
-  if (idx !== -1) {
-    days.splice(idx, 1);
+function renderHeavyReference(card, exId) {
+  const lastHs = getLatestEntry(exId, 'heavy');
+  const line = document.createElement('div');
+  line.className = 'prev-weight';
+  if (lastHs) {
+    line.textContent = 'Last Heavy Strength weight: ' + lastHs.weight + ' lb' + (lastHs.date ? (' (' + lastHs.date + ')') : '') + ' (reference only)';
   } else {
-    if (days.length >= max) { toast('Switch to Custom days to choose more than ' + max); render(); return; }
-    days.push(dayKey);
+    line.textContent = 'No Heavy Strength weight logged yet.';
   }
-  hs.days = getOrderedDayKeys().filter(function(k) { return days.indexOf(k) !== -1; });
+  card.appendChild(line);
+  if (!lastHs) {
+    const sug = heavyStrengthStartingSuggestion(exId);
+    const sugRow = document.createElement('div');
+    sugRow.style.cssText = 'font-size:12px;color:#1c3a7a;background:#eef3fb;border-radius:6px;padding:6px 8px;margin-top:8px;';
+    if (sug && sug.suggested) {
+      sugRow.textContent = 'Suggested starting weight: ' + sug.suggested + ' lb (your last normal lift was ' + sug.lastNormal + ' lb' + (sug.date ? (' on ' + sug.date) : '') + ', plus a small step). This is only a suggestion. Enter your own weight if you prefer.';
+      card.appendChild(sugRow);
+    } else if (sug && sug.insufficient) {
+      sugRow.textContent = 'Not enough normal history to suggest a starting weight. Enter a weight manually.';
+      card.appendChild(sugRow);
+    }
+  }
+}
+
+function toggleHeavyDay(dayKey) {
+  if (!state.heavyDays) state.heavyDays = {};
+  if (state.heavyDays[dayKey]) delete state.heavyDays[dayKey];
+  else state.heavyDays[dayKey] = true;
   saveState();
   render();
+  toast(state.heavyDays[dayKey] ? 'Heavy Strength on for this day' : 'Heavy Strength off for this day');
+}
+
+/* Keeps each day's Heavy Strength setting with its workout when two workouts are swapped for all future weeks. */
+function swapHeavyDaySettings(a, b) {
+  if (!state.heavyDays) state.heavyDays = {};
+  const va = !!state.heavyDays[a];
+  const vb = !!state.heavyDays[b];
+  delete state.heavyDays[a];
+  delete state.heavyDays[b];
+  if (vb) state.heavyDays[a] = true;
+  if (va) state.heavyDays[b] = true;
+}
+
+/* Used by delete-cycle and cycle lists: does any saved data exist for this cycle number? */
+function hasAnyKeyForCycle(c) {
+  const tag = '::c' + c + '::';
+  return [state.weights || {}, state.heavyWeights || {}, state.occurrenceModes || {}].some(function(m) {
+    return Object.keys(m).some(function(k) { return k.indexOf(tag) !== -1; });
+  });
+}
+
+/* Old Stage 2 setting ({ enabled, days[] }) becomes the per-day map. Idempotent. */
+function migrateHeavyStrengthSettings() {
+  if (!state.heavyDays) state.heavyDays = {};
+  const old = state.heavyStrength;
+  if (old && typeof old === 'object') {
+    if (old.enabled && Array.isArray(old.days)) {
+      old.days.forEach(function(k) { state.heavyDays[k] = true; });
+    }
+    delete state.heavyStrength;
+    saveState();
+  }
 }
 
 function renderTrainingPreferences(container) {
   if (!state.activePlan) return;
-  const hs = state.heavyStrength;
   const wrap = document.createElement('div');
   wrap.className = 'card';
   wrap.innerHTML = '<p class="ex-name" style="margin-bottom:6px;">Training Preferences</p>' +
-    '<p class="ex-scheme" style="margin-bottom:10px;">Optional ways of performing your selected workouts. These change how sets are prescribed, not which muscles are trained.</p>';
+    '<p class="ex-scheme" style="margin-bottom:10px;">Optional ways of performing individual workout days. These change how sets are prescribed, not which exercises are included.</p>';
   const block = document.createElement('div');
   block.style.cssText = 'border-top:1px solid #f0efe9;padding-top:10px;';
-  function note(text, style) {
-    const p = document.createElement('div');
-    p.style.cssText = style || 'font-size:12px;color:#777;margin-bottom:8px;';
-    p.textContent = text;
-    block.appendChild(p);
-  }
-  function btn(text, style, onclick) {
-    const b = document.createElement('button');
-    b.textContent = text;
-    b.style.cssText = style;
-    b.onclick = onclick;
-    block.appendChild(b);
-  }
-  const BTN_DARK = 'width:100%;padding:12px;background:#1c1c1a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;margin-bottom:8px;';
-  const BTN_LIGHT = 'width:100%;padding:10px;background:#f0efe9;color:#1c1c1a;border:none;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:8px;';
-  const BTN_DANGER = 'width:100%;padding:10px;background:#fff;color:#b31942;border:1px solid #f0cba4;border-radius:10px;font-size:13px;font-weight:600;';
   const title = document.createElement('p');
   title.className = 'ex-name';
   title.style.cssText = 'font-size:14px;margin-bottom:4px;';
   title.textContent = 'Heavy Strength';
   block.appendChild(title);
-  if (!hs) {
-    note('Trains the same exercises with heavier loads and lower rep ranges on the days you choose. Sets stay the same, your weights stay under your control, and completed or in-progress workouts are never changed.');
-    btn('Enable Heavy Strength', BTN_DARK, enableHeavyStrength);
-  } else {
-    note(hs.enabled ? 'Status: On' : 'Status: Paused (your schedule is saved)', 'font-size:12px;font-weight:700;color:#1c3a7a;margin-bottom:8px;');
-    note('Applies only to unstarted workouts. Completed and in-progress workouts keep their original targets.');
-    const modeRow = document.createElement('div');
-    modeRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;';
-    [{ k: 'one', l: '1 day / week' }, { k: 'two', l: '2 days / week' }, { k: 'custom', l: 'Custom days' }].forEach(function(opt) {
-      const b = document.createElement('button');
-      const on = hs.mode === opt.k;
-      b.textContent = opt.l;
-      b.style.cssText = 'flex:1;padding:8px 6px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid ' + (on ? '#e8722c' : '#ddd') + ';background:' + (on ? '#fdf0e6' : '#fff') + ';';
-      b.onclick = function() { setHeavyStrengthMode(opt.k); };
-      modeRow.appendChild(b);
-    });
-    block.appendChild(modeRow);
-    const workoutDays = getWorkoutDayKeysForHeavy();
-    note('Workout days that receive Heavy Strength:');
-    workoutDays.forEach(function(dk) {
-      const row = document.createElement('label');
-      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = hs.days.indexOf(dk) !== -1;
-      cb.style.cssText = 'width:20px;height:20px;accent-color:#e8722c;';
-      cb.onchange = function() { toggleHeavyStrengthDay(dk); };
-      row.appendChild(cb);
-      const lbl = document.createElement('span');
-      lbl.textContent = state.activePlan[dk].label;
-      row.appendChild(lbl);
-      block.appendChild(row);
-    });
-    const maxDays = heavyStrengthMaxDays(hs.mode);
-    if (hs.mode !== 'custom' && workoutDays.length < maxDays) {
-      note('This program has ' + workoutDays.length + ' workout day' + (workoutDays.length === 1 ? '' : 's') + ', so ' + maxDays + ' per week is not possible. Showing all available days.');
-    }
-    if (hs.days.length === 0) note('Select at least one workout day to apply Heavy Strength.');
-    note('Targets by exercise type: primary lifts 4–6 reps, secondary 6–8, accessory 8–12, isolation 10–15. Sets are unchanged. Weight increases are only suggested when your logged weights support one.');
-    if (hs.enabled) btn('Pause Heavy Strength', BTN_LIGHT, disableHeavyStrength);
-    else btn('Resume Heavy Strength', BTN_DARK, resumeHeavyStrength);
-    btn('Remove Heavy Strength Entirely', BTN_DANGER, removeHeavyStrength);
+  const intro = document.createElement('div');
+  intro.style.cssText = 'font-size:12px;color:#777;margin-bottom:8px;';
+  intro.textContent = 'Turn it on for any workout day. Primary lifts use 5 reps, secondary lifts 6, accessory lifts 8, and isolation moves 10. Sets stay the same. Heavy Strength keeps its own weights, graphs, and personal bests. A workout you have already started keeps the mode it began with.';
+  block.appendChild(intro);
+  const workoutKeys = getOrderedDayKeys().filter(function(dk) { return !state.activePlan[dk].rest; });
+  if (workoutKeys.length === 0) {
+    const none = document.createElement('div');
+    none.style.cssText = 'font-size:12px;color:#777;';
+    none.textContent = 'This program has no workout days.';
+    block.appendChild(none);
   }
+  workoutKeys.forEach(function(dk) {
+    const on = !!(state.heavyDays && state.heavyDays[dk]);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #f0efe9;';
+    const left = document.createElement('div');
+    left.style.cssText = 'min-width:0;';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:14px;font-weight:600;';
+    lbl.textContent = getEffectiveDay(dk).label;
+    left.appendChild(lbl);
+    const status = document.createElement('div');
+    status.style.cssText = 'font-size:11px;color:#888;';
+    status.textContent = on ? 'Heavy Strength on' : 'Normal';
+    if (isOccurrenceStarted(dk, state.week, state.cycle)) {
+      status.textContent += ' · this week’s workout has already started and keeps its mode';
+    }
+    left.appendChild(status);
+    row.appendChild(left);
+    const btn = document.createElement('button');
+    btn.textContent = on ? 'Turn OFF' : 'Turn ON';
+    btn.style.cssText = 'flex-shrink:0;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;border:1px solid ' + (on ? '#e8722c' : '#ddd') + ';background:' + (on ? '#e8722c' : '#fff') + ';color:' + (on ? '#fff' : '#1c1c1a') + ';';
+    btn.onclick = function() { toggleHeavyDay(dk); };
+    row.appendChild(btn);
+    block.appendChild(row);
+  });
   wrap.appendChild(block);
   container.appendChild(wrap);
 }
@@ -2830,7 +2914,7 @@ function finalizeProgram(goalKey, subgoalKey) {
   const isNewCycleTransition = state.cycle > 1 && state.activePlan;
   state.goal = goalKey;
   state.selectedSubgoal = subgoalKey;
-  state.heavyStrength = null;
+  state.heavyDays = {};
   state.activePlan = JSON.parse(JSON.stringify(program.days));
   state.programLength = state.selectedLength;
   state.cycleStartDate = todayStr();
@@ -2843,32 +2927,81 @@ function finalizeProgram(goalKey, subgoalKey) {
   render();
 }
 
-function getEntry(dayKey, exId, week, cycle) {
+function isDayBlockId(id) { return String(id).indexOf('__') === 0; }
+
+function occurrenceKey(dayKey, week, cycle) { return dayKey + '::c' + cycle + '::w' + week; }
+
+/* Training mode of one workout occurrence (dayKey + cycle + week).
+   - Once anything is logged or ticked for it, its mode is FROZEN in state.occurrenceModes.
+   - Before that, an occurrence in the current cycle follows the day's Heavy Strength setting.
+   - Past cycles without a frozen mode are normal. */
+function getOccurrenceMode(dayKey, week, cycle) {
+  const frozen = state.occurrenceModes && state.occurrenceModes[occurrenceKey(dayKey, week, cycle)];
+  if (frozen) return frozen;
+  const day = state.activePlan && state.activePlan[dayKey];
+  if (cycle === state.cycle && day && !day.rest && state.heavyDays && state.heavyDays[dayKey]) return 'heavy';
+  return 'normal';
+}
+
+function freezeOccurrenceMode(dayKey, week, cycle) {
+  if (!state.occurrenceModes) state.occurrenceModes = {};
+  const k = occurrenceKey(dayKey, week, cycle);
+  if (!state.occurrenceModes[k]) state.occurrenceModes[k] = getOccurrenceMode(dayKey, week, cycle);
+}
+
+function isOccurrenceStarted(dayKey, week, cycle) {
+  return !!(state.occurrenceModes && state.occurrenceModes[occurrenceKey(dayKey, week, cycle)]);
+}
+
+/* Exercise entries go to the map for the requested mode. Day-level entries always use state.weights. */
+function getEntryInMode(dayKey, exId, week, cycle, mode) {
   const c = cycle !== undefined ? cycle : state.viewingCycle;
   const k = dayKey + '::' + exId + '::c' + c + '::w' + week;
-  return state.weights[k] || null;
+  const useHeavy = mode === 'heavy' && !isDayBlockId(exId);
+  const map = useHeavy ? (state.heavyWeights || {}) : state.weights;
+  return map[k] || null;
 }
+
+function getEntry(dayKey, exId, week, cycle) {
+  const c = cycle !== undefined ? cycle : state.viewingCycle;
+  return getEntryInMode(dayKey, exId, week, c, getOccurrenceMode(dayKey, week, c));
+}
+
 function setEntry(dayKey, exId, week, field, val) {
-  const k = dayKey + '::' + exId + '::c' + state.viewingCycle + '::w' + week;
-  if (!state.weights[k]) state.weights[k] = {};
-  state.weights[k][field] = val;
+  const c = state.viewingCycle;
+  if (exId !== '__steps__') freezeOccurrenceMode(dayKey, week, c);
+  const mode = getOccurrenceMode(dayKey, week, c);
+  const k = dayKey + '::' + exId + '::c' + c + '::w' + week;
+  const useHeavy = mode === 'heavy' && !isDayBlockId(exId);
+  if (useHeavy && !state.heavyWeights) state.heavyWeights = {};
+  const map = useHeavy ? state.heavyWeights : state.weights;
+  if (!map[k]) map[k] = {};
+  map[k][field] = val;
   saveState();
 }
+
 function clearEntry(dayKey, exId, week) {
-  const k = dayKey + '::' + exId + '::c' + state.viewingCycle + '::w' + week;
-  delete state.weights[k];
+  const c = state.viewingCycle;
+  if (exId !== '__steps__') freezeOccurrenceMode(dayKey, week, c);
+  const mode = getOccurrenceMode(dayKey, week, c);
+  const k = dayKey + '::' + exId + '::c' + c + '::w' + week;
+  const useHeavy = mode === 'heavy' && !isDayBlockId(exId);
+  const map = useHeavy ? (state.heavyWeights || {}) : state.weights;
+  delete map[k];
   saveState();
 }
-function getPrevEntry(dayKey, exId, week) {
+
+function getPrevEntry(dayKey, exId, week, mode) {
+  const m = mode === 'heavy' ? 'heavy' : 'normal';
   for (let w = week - 1; w >= 1; w--) {
-    const e = getEntry(dayKey, exId, w);
+    const e = getEntryInMode(dayKey, exId, w, state.viewingCycle, m);
     if (e && (e.weight || e.done)) return { week: w, entry: e };
   }
   if (state.viewingCycle > 1) {
     for (let c = state.viewingCycle - 1; c >= 1; c--) {
-      for (let w = 8; w >= 1; w--) {
-        const e = getEntry(dayKey, exId, w, c);
-        if (e && (e.weight || e.done)) return { week: w, entry: e, cycle: c };
+      for (let w2 = 8; w2 >= 1; w2--) {
+        const e2 = getEntryInMode(dayKey, exId, w2, c, m);
+        if (e2 && (e2.weight || e2.done)) return { week: w2, entry: e2, cycle: c };
       }
     }
   }
@@ -2897,8 +3030,9 @@ function getPrevEntry(dayKey, exId, week) {
    only changes which historical entry is treated as "most recent"
    for reference/suggestion display, per the requested fix.
    ========================================================= */
-function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
+function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle, mode) {
   const c = cycle !== undefined ? cycle : state.viewingCycle;
+  const m = mode === 'heavy' ? 'heavy' : 'normal';
   let best = null;
   Object.keys(state.activePlan).forEach(function(dayKey) {
     const day = state.activePlan[dayKey];
@@ -2906,7 +3040,7 @@ function getLastKnownWeightAnyDay(exId, excludeDayKey, week, cycle) {
     if (exId !== '__steps__' && (!day.exerciseIds || day.exerciseIds.indexOf(exId) === -1)) return;
     for (let w = week; w >= 1; w--) {
       if (dayKey === excludeDayKey && w === week) continue;
-      const e = getEntry(dayKey, exId, w, c);
+      const e = getEntryInMode(dayKey, exId, w, c, m);
       if (e && e.weight) {
         const candidate = { week: w, entry: e, dayKey: dayKey };
         if (!best) { best = candidate; continue; }
@@ -2964,26 +3098,39 @@ function getMostRecentHistoricalWeightAcrossPrograms(exId) {
 
 let entriesCacheVersion = -1;
 let entriesCacheByExercise = {};
-
-function getAllEntriesForExercise(exId) {
-  if (entriesCacheVersion === stateVersion && entriesCacheByExercise[exId]) {
-    return entriesCacheByExercise[exId];
-  }
+/* mode 'normal' (default) or 'heavy'. The two series are never combined. */
+function getAllEntriesForExercise(exId, mode) {
+  const m = mode === 'heavy' ? 'heavy' : 'normal';
+  const cacheKey = exId + '|' + m;
   if (entriesCacheVersion !== stateVersion) {
     entriesCacheByExercise = {};
     entriesCacheVersion = stateVersion;
   }
+  if (entriesCacheByExercise[cacheKey]) return entriesCacheByExercise[cacheKey];
   const results = [];
   Object.keys(state.activePlan).forEach(function(dayKey) {
     for (let c = 1; c <= state.cycle; c++) {
       for (let w = 1; w <= (state.programLength || 8); w++) {
-        const e = getEntry(dayKey, exId, w, c);
+        const e = getEntryInMode(dayKey, exId, w, c, m);
         if (e && e.weight) results.push({ week: w, cycle: c, dayKey: dayKey, weight: parseFloat(e.weight), date: e.date });
       }
     }
   });
-  entriesCacheByExercise[exId] = results;
+  entriesCacheByExercise[cacheKey] = results;
   return results;
+}
+
+/* Chronological order: by stored date, falling back to cycle/week for legacy entries. */
+function sortEntriesChronologically(list) {
+  return list.slice().sort(function(a, b) {
+    if (a.date && b.date && a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return (a.cycle - b.cycle) || (a.week - b.week);
+  });
+}
+
+function getLatestEntry(exId, mode) {
+  const list = sortEntriesChronologically(getAllEntriesForExercise(exId, mode));
+  return list.length ? list[list.length - 1] : null;
 }
 
 const proteinPresets = [
@@ -3214,8 +3361,8 @@ function getSwapAlternatives(exId, dayKey, excludeIds) {
   if (pattern && movementPatternGroups[pattern]) {
     candidates = movementPatternGroups[pattern].filter(passesHardFilters);
   }
-  if (candidates.length === 0) {
-    // Fallback for exercises with no known movement pattern (custom exercises,
+  if (candidates.length === 0 && !pattern) {
+    // Fallback only for exercises with no known movement pattern (custom exercises) (custom exercises,
     // or any built-in exercise not yet classified): same muscle group only,
     // matching the original pre-Batch-2 behavior so nothing regresses.
     candidates = (substituteGroups[ex.muscle] || []).filter(passesHardFilters);
@@ -3563,18 +3710,32 @@ function swapWeekDataBetweenDays(sourceDayKey, otherDayKey, cycle, week) {
     if (dk === otherDayKey) return sourceDayKey;
     return null;
   }
-  const toMove = [];
-  Object.keys(state.weights).forEach(function(k) {
-    if (k.slice(-suffix.length) !== suffix) return;
-    const parts = k.split('::');
-    const target = targetOf(parts[0]);
-    if (!target) return;
-    const newExId = remapBlockId(parts[1], parts[0], target);
-    toMove.push({ oldKey: k, newKey: [target, newExId, parts[2], parts[3]].join('::') });
-  });
-  const savedValues = toMove.map(function(m) { return state.weights[m.oldKey]; });
-  toMove.forEach(function(m) { delete state.weights[m.oldKey]; });
-  toMove.forEach(function(m, i) { state.weights[m.newKey] = savedValues[i]; });
+  function moveKeys(map) {
+    if (!map) return;
+    const moves = [];
+    Object.keys(map).forEach(function(k) {
+      if (k.slice(-suffix.length) !== suffix) return;
+      const parts = k.split('::');
+      const target = targetOf(parts[0]);
+      if (!target) return;
+      moves.push({ oldKey: k, newKey: [target, remapBlockId(parts[1], parts[0], target), parts[2], parts[3]].join('::'), value: map[k] });
+    });
+    moves.forEach(function(m) { delete map[m.oldKey]; });
+    moves.forEach(function(m) { map[m.newKey] = m.value; });
+  }
+  /* Freeze both workouts' modes first, so each one keeps the mode it was started with. */
+  freezeOccurrenceMode(sourceDayKey, week, cycle);
+  freezeOccurrenceMode(otherDayKey, week, cycle);
+  moveKeys(state.weights);
+  if (!state.heavyWeights) state.heavyWeights = {};
+  moveKeys(state.heavyWeights);
+  if (!state.occurrenceModes) state.occurrenceModes = {};
+  const sK = occurrenceKey(sourceDayKey, week, cycle);
+  const oK = occurrenceKey(otherDayKey, week, cycle);
+  const sV = state.occurrenceModes[sK];
+  const oV = state.occurrenceModes[oK];
+  if (oV) state.occurrenceModes[sK] = oV; else delete state.occurrenceModes[sK];
+  if (sV) state.occurrenceModes[oK] = sV; else delete state.occurrenceModes[oK];
 
   const protein = [];
   Object.keys(state.proteinEntries).forEach(function(k) {
@@ -3622,12 +3783,13 @@ function applyDaySwapThisWeekOnly(sourceDayKey, otherKey) {
 function applyDaySwapAllFutureWeeks(sourceDayKey, otherKey) {
   if (state.viewingCycle !== state.cycle) { toast(PAST_CYCLE_EDIT_MESSAGE); return; }
   const dayKeyToName = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
-  // 1. Freeze earlier weeks so completed history keeps the workouts it was logged against.
   freezePastWeeksForDays([sourceDayKey, otherKey]);
-  // 2. Current week: capture the effective workouts (including any override) before changing anything.
+  for (let w = 1; w < state.week; w++) {
+    freezeOccurrenceMode(sourceDayKey, w, state.cycle);
+    freezeOccurrenceMode(otherKey, w, state.cycle);
+  }
   const sourceCurrent = cloneDay(getEffectiveDay(sourceDayKey));
   const otherCurrent = cloneDay(getEffectiveDay(otherKey));
-  // 3. Future weeks: swap the program template, keeping each slot's weekday name.
   const sourceBase = state.activePlan[sourceDayKey];
   const otherBase = state.activePlan[otherKey];
   state.activePlan[sourceDayKey] = Object.assign({}, otherBase, {
@@ -3636,7 +3798,6 @@ function applyDaySwapAllFutureWeeks(sourceDayKey, otherKey) {
   state.activePlan[otherKey] = Object.assign({}, sourceBase, {
     label: dayKeyToName[otherKey] + ' ' + splitDayLabel(sourceBase.label).typePart
   });
-  // 4. Current week: show the swapped workout immediately, even if an override existed.
   const ovKey = weekOverrideKey(state.cycle, state.week);
   if (!state.weeklyOverrides) state.weeklyOverrides = {};
   if (!state.weeklyOverrides[ovKey]) state.weeklyOverrides[ovKey] = {};
@@ -3646,9 +3807,9 @@ function applyDaySwapAllFutureWeeks(sourceDayKey, otherKey) {
   state.weeklyOverrides[ovKey][otherKey] = Object.assign({}, sourceCurrent, {
     label: dayKeyToName[otherKey] + ' ' + splitDayLabel(sourceCurrent.label).typePart
   });
-  // 5. Removal records and current-week logged data travel with the workout.
   swapCycleRemovalRecords(sourceDayKey, otherKey);
   swapWeekDataBetweenDays(sourceDayKey, otherKey, state.viewingCycle, state.week);
+  swapHeavyDaySettings(sourceDayKey, otherKey);
   state.day = sourceDayKey;
   saveState();
   render();
@@ -4160,6 +4321,8 @@ function deleteCycle(cycleNum) {
       if (ovKey.indexOf('c' + cycleNum + '-') === 0) delete state.weeklyOverrides[ovKey];
     });
   }
+  if (state.heavyWeights) Object.keys(state.heavyWeights).forEach(function(k) { if (k.indexOf('::c' + cycleNum + '::') !== -1) delete state.heavyWeights[k]; });
+  if (state.occurrenceModes) Object.keys(state.occurrenceModes).forEach(function(k) { if (k.indexOf('::c' + cycleNum + '::') !== -1) delete state.occurrenceModes[k]; });
   const optionalToClean = loadOptionalHistory();
   Object.keys(optionalToClean).forEach(function(k) {
     if (k.indexOf('::c' + cycleNum + '::') !== -1) delete optionalToClean[k];
@@ -4179,7 +4342,7 @@ function deleteCycle(cycleNum) {
   const remainingCycles = [];
   for (let c = 1; c <= state.cycle; c++) {
     if (c === cycleNum) continue;
-    const hasWeights = Object.keys(state.weights).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
+    const hasWeights = hasAnyKeyForCycle(c);
     const hasProtein = Object.keys(state.proteinEntries).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
     const hasArchive = state.archivedCheckpoints.some(function(a) { return a.cycle === c; });
     if (hasWeights || hasProtein || hasArchive || c === 1) remainingCycles.push(c);
@@ -4202,7 +4365,7 @@ function deleteCycle(cycleNum) {
 
 function cycleActuallyExists(c) {
   if (c === state.cycle) return true;
-  const hasWeights = Object.keys(state.weights).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
+  const hasWeights = hasAnyKeyForCycle(c);
   const hasProtein = Object.keys(state.proteinEntries).some(function(k) { return k.indexOf('::c' + c + '::') !== -1; });
   const hasArchive = (state.archivedCheckpoints || []).some(function(a) { return a.cycle === c; });
   return hasWeights || hasProtein || hasArchive;
@@ -4455,8 +4618,8 @@ function getProgressionSuggestion(scheme, week, recoveryPref, mostRecentLoggedWe
    text is also phrased around logged-weight consistency specifically, rather than implying
    certainty about reps or form the app has no way to know.
    ========================================================= */
-function getProgressionOrDeloadDecision(dayKey, exId) {
-  const entries = getAllEntriesForExercise(exId)
+function getProgressionOrDeloadDecision(dayKey, exId, mode) {
+  const entries = getAllEntriesForExercise(exId, mode === 'heavy' ? 'heavy' : 'normal')
     .filter(function(e) { return e.dayKey === dayKey; })
     .sort(function(a, b) {
       if (a.date && b.date) return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0);
@@ -5445,7 +5608,7 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   if (!ex) {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = '<p class="ex-scheme" style="color:#999;">An exercise in today\u2019s plan is no longer available. Use Swap to replace it.</p>';
+    card.innerHTML = '<p class="ex-scheme" style="color:#999;">An exercise in today’s plan is no longer available. Use Swap to replace it.</p>';
     const swapBtn = document.createElement('button');
     swapBtn.className = 'ex-btn';
     swapBtn.style.cssText = 'background:#eef3fb;border-color:#b9cdf0;color:#1c3a7a;margin-top:8px;';
@@ -5456,24 +5619,22 @@ function renderExerciseCard(dayKey, exId, exIndex) {
   }
   const day = state.activePlan[dayKey];
   const isPriority = day.priorityIds && day.priorityIds.indexOf(exId) !== -1;
+  const mode = getOccurrenceMode(dayKey, state.week, state.viewingCycle);
+  const isHeavy = mode === 'heavy';
+  const displayScheme = heavyStrengthSchemeFor(dayKey, exId, ex.scheme);
+  const hasHeavyTarget = displayScheme !== ex.scheme;
   const card = document.createElement('div');
   card.className = 'card';
   if (isPriority) { card.style.cssText = 'border: 2px solid #c2427a; background: #fff9fa;'; }
   const top = document.createElement('div');
   top.className = 'ex-top';
   const left = document.createElement('div');
-  const displayScheme = heavyStrengthSchemeFor(dayKey, exId, ex.scheme);
-  const isHeavy = displayScheme !== ex.scheme;
-  left.innerHTML = '<p class="ex-name">' + (isPriority ? '\u2b50 ' : '') + ex.name + '</p><p class="ex-scheme">' + displayScheme + (isHeavy ? ' \u00b7 Heavy Strength' : '') + '</p>';
+  let schemeText = displayScheme;
+  if (isHeavy) schemeText += hasHeavyTarget ? ' · Heavy Strength' : ' · Heavy Strength day (normal targets)';
+  left.innerHTML = '<p class="ex-name">' + (isPriority ? '⭐ ' : '') + ex.name + '</p><p class="ex-scheme">' + schemeText + '</p>';
   top.appendChild(left);
   const actions = document.createElement('div');
   actions.className = 'ex-actions';
-  /* NEW: per-exercise removal checkbox. Checking it opens the existing-style in-app
-     confirmation (openExerciseRemovalPrompt) rather than a disruptive browser confirm().
-     The checkbox itself holds no removal state of its own - it is always rendered
-     unchecked on every render, since a genuinely removed exercise simply no longer
-     appears at all (getEffectiveDay already filters it out before this card is ever
-     built), so there is nothing for this checkbox to reflect after the fact. */
   const removeCheckboxLabel = document.createElement('label');
   removeCheckboxLabel.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:11px;color:#999;flex-shrink:0;cursor:pointer;white-space:nowrap;';
   const removeCheckbox = document.createElement('input');
@@ -5536,28 +5697,24 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     render();
   });
   card.appendChild(row);
-  const effectiveRecoveryPref = state.programRecoveryPref || 'standard';
-  {
-    /* AUDIT FIX: getProgressionOrDeloadDecision is now the single, mutually-exclusive
-       source of truth for whether to show an increase suggestion, a deload suggestion,
-       or nothing at all - replacing the old dual-path logic where a separate deload check
-       could silently override an increase recommendation triggered by the same data. */
-    const decision = getProgressionOrDeloadDecision(dayKey, exId);
-    let suggestion = null;
-    if (decision.type === 'deload') {
-      suggestion = { type: 'deload', text: decision.text };
-    } else if (decision.type === 'increase') {
-      const prevForSuggestion = getPrevEntry(dayKey, exId, state.week);
-      const detail = getProgressionSuggestion(ex.scheme, state.week, effectiveRecoveryPref, prevForSuggestion ? prevForSuggestion.entry.weight : null);
-      suggestion = detail ? { type: detail.type, text: decision.text + ' ' + detail.text } : { type: 'weight', text: decision.text };
-    }
-    if (suggestion) {
-      const sugRow = document.createElement('div');
-      const isDeload = suggestion.type === 'deload';
-      sugRow.style.cssText = 'font-size:12px;color:' + (isDeload ? '#7a4a1c' : '#1c3a7a') + ';background:' + (isDeload ? '#fdf0e6' : '#eef3fb') + ';border-radius:6px;padding:6px 8px;margin-top:8px;';
-      sugRow.textContent = suggestion.text;
-      card.appendChild(sugRow);
-    }
+  /* Historical information always appears BELOW the editable input and never fills it. */
+  const historyMode = isHeavy ? 'heavy' : 'normal';
+  if (isHeavy) renderHeavyReference(card, exId);
+  const decision = getProgressionOrDeloadDecision(dayKey, exId, historyMode);
+  let suggestion = null;
+  if (decision.type === 'deload') {
+    suggestion = { type: 'deload', text: decision.text };
+  } else if (decision.type === 'increase') {
+    const prevForSuggestion = getPrevEntry(dayKey, exId, state.week, historyMode);
+    const detail = getProgressionSuggestion(displayScheme, state.week, state.programRecoveryPref || 'standard', prevForSuggestion ? prevForSuggestion.entry.weight : null);
+    suggestion = detail ? { type: detail.type, text: decision.text + ' ' + detail.text } : { type: 'weight', text: decision.text };
+  }
+  if (suggestion) {
+    const sugRow = document.createElement('div');
+    const isDeload = suggestion.type === 'deload';
+    sugRow.style.cssText = 'font-size:12px;color:' + (isDeload ? '#7a4a1c' : '#1c3a7a') + ';background:' + (isDeload ? '#fdf0e6' : '#eef3fb') + ';border-radius:6px;padding:6px 8px;margin-top:8px;';
+    sugRow.textContent = suggestion.text;
+    card.appendChild(sugRow);
   }
   if (entry.date) {
     const dn = document.createElement('div');
@@ -5565,15 +5722,15 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     dn.textContent = 'Logged: ' + entry.date;
     card.appendChild(dn);
   }
-  const prev = getPrevEntry(dayKey, exId, state.week);
+  const prev = getPrevEntry(dayKey, exId, state.week, historyMode);
   if (prev) {
     const p = document.createElement('div');
     p.className = 'prev-weight';
     const cTag = prev.cycle ? ('Cycle ' + prev.cycle + ', ') : '';
-    p.textContent = cTag + 'Week ' + prev.week + ' (this day): ' + prev.entry.weight + ' lbs';
+    p.textContent = cTag + 'Week ' + prev.week + ' (this day' + (isHeavy ? ', Heavy Strength' : '') + '): ' + prev.entry.weight + ' lbs';
     card.appendChild(p);
   }
-  const lastElsewhere = getLastKnownWeightAnyDay(exId, dayKey, state.week);
+  const lastElsewhere = getLastKnownWeightAnyDay(exId, dayKey, state.week, undefined, historyMode);
   if (lastElsewhere && !entry.weight) {
     const ref = document.createElement('div');
     ref.className = 'prev-weight';
@@ -5582,18 +5739,13 @@ function renderExerciseCard(dayKey, exId, exIndex) {
     ref.textContent = lastElsewhere.entry.weight + ' lbs logged ' + (lastElsewhere.entry.date || '') + ' (' + otherDayLabel + ', reference only)';
     card.appendChild(ref);
   }
-  /* BATCH 1 ADDITION: cross-program historical reference. Only fires when the
-     current-plan search above found nothing (meaning this is a fresh program
-     that doesn't share this dayKey/history yet), so it can never duplicate the
-     existing same-program reference line above. Purely informational - never
-     writes to state, never touches the fillable weight input. */
-  if (!lastElsewhere && !entry.weight) {
+  if (!isHeavy && !lastElsewhere && !entry.weight) {
     const crossProgram = getMostRecentHistoricalWeightAcrossPrograms(exId);
     if (crossProgram) {
       const ref2 = document.createElement('div');
       ref2.className = 'prev-weight';
       ref2.style.cssText = 'font-style:italic;color:#a15a1c;';
-      ref2.textContent = 'Last known from a previous program: ' + crossProgram.entry.weight + ' lbs' + (crossProgram.entry.date ? (' (' + crossProgram.entry.date + ')') : '') + ' \u2014 reference only';
+      ref2.textContent = 'Last known from a previous program: ' + crossProgram.entry.weight + ' lbs' + (crossProgram.entry.date ? (' (' + crossProgram.entry.date + ')') : '') + ' — reference only';
       card.appendChild(ref2);
     }
   }
@@ -6236,6 +6388,14 @@ function renderProgressScreen(container) {
       return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
     });
     content.appendChild(buildLineChart(exerciseLibrary[exId].name, points, '#e8722c', true));
+    const heavyForChart = sortEntriesChronologically(getAllEntriesForExercise(exId, 'heavy'));
+    if (heavyForChart.length > 0) {
+      const heavyPoints = heavyForChart.map(function(e) {
+        const dayLabel = state.activePlan[e.dayKey] ? state.activePlan[e.dayKey].label.split(' ')[0] : e.dayKey;
+        return { label: (state.cycle > 1 ? ('C' + e.cycle + 'W' + e.week) : ('Wk' + e.week)) + ' ' + dayLabel, val: e.weight, cycle: e.cycle, week: e.week };
+      });
+      content.appendChild(buildLineChart(exerciseLibrary[exId].name + ' (Heavy Strength)', heavyPoints, '#7a1f5c', true));
+    }
   });
   if (Object.keys(seen).length === 0) {
     const nd = document.createElement('div');
